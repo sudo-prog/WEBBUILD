@@ -1,0 +1,21 @@
+--- a/03_Scripts_Code/scripts/abn_pipeline_full.py
++++ b/03_Scripts_Code/scripts/abn_pipeline_full.py
+@@ -139,7 +139,7 @@
+                     elem.clear()
+                     while elem.getprevious() is not None:
+                         del elem.getparent()[0]
+-            print(f"  → kept {keaned} records")
++            print(f"  → kept {kept} records")
+             context = None
+             fh.close()
+     print(f"\n✅ Total records written: {total_written:,}")
+ 
+@@ -196,7 +196,7 @@
+     'Darwin':    list(range(0800, 1000)),  # NT
+     'Canberra': list(range(0200, 0800)),  # ACT
+     'Hobart':    list(range(0700, 1000)),  # TAS
+-    'Melbourne': list(range(0300, 800)),  # VIC
++    'Melbourne': list(range(300, 800)),  # VIC
+     'Sydney':    list(range(2000, 3000)), # NSW
+     'Adelaide': list(range(0900, 1000)),  # SA
+     'Perth': list(range(0600, 800))       # WA

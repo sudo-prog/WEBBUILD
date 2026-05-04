@@ -103,21 +103,28 @@ def main():
     args = parser.parse_args()
 
     all_leads = []
+    user_agents = [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 11.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"
+    ]
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"
-        )
-        try:
-            for city in CITIES:
-                state = STATES[city]
+        browser = p.chromium.launch(headless=True, channel='chrome')
+        for city in CITIES:
+            state = STATES[city]
+            page = browser.new_page(
+                user_agent=random.choice(user_agents)
+            )
+            try:
                 print(f"\n=== {city} ({state}) ===")
                 for category in CATEGORIES:
                     leads = scrape_category(page, city, state, category, max_pages=args.pages)
                     all_leads.extend(leads)
                     print(f"  {category}: {len(leads)}")
-        finally:
-            browser.close()
+            finally:
+                page.close()
+        browser.close()
 
     seen = set()
     uniq = []

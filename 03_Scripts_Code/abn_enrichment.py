@@ -71,7 +71,9 @@ _ALLOWED_SUBURBS: Set[str] = set()
 
 # Reject obvious toll-free / placeholder phone patterns (1300, 1800, 190x)
 _PLACEHOLDER_PHONE_RE = re.compile(
-    r"^(?:13[0-9]{2}|1800|190[0-9])\s*-\s*(?:[0-9]{3}\s*-\s*[0-9]{3}|[0-9]{6})$",
+    r"^(?:13[0-9]{2}|1800|190[0-9])"
+    r"(\s*-\s*|\s*)?"
+    r"(?:[0-9]{3}(\s*-\s*|\s*)?[0-9]{3}|[0-9]{6})$",
     re.IGNORECASE
 )
 
@@ -265,12 +267,12 @@ def log_ingestion(city: str, source: str, count: int, status: str = "success", e
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────────
-def main():
+def main_old():
     p = argparse.ArgumentParser(description="Enrich qualified leads with ABN verification")
 def main():
-    p = argparse.ArgumentParser(description="Enrich qualified leads with ABN verification")
-    p.add_argument("--city", choices=["sydney","melbourne","all"], default="all",
-                   help="Which city leads to process")
+    p.add_argument(
+        "--city", choices=["sydney","melbourne","all"], default="all",
+        help="Which city leads to process")
     p.add_argument("--dry-run", action="store_true",
                    help="Show what would be upserted without touching the database")
     p.add_argument("--suburbs", default="",

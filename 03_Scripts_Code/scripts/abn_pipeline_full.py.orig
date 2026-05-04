@@ -37,7 +37,7 @@ CAPITAL_POSTCODES = {
     'Adelaide':  list(range(5000, 5200)) + list(range(5800, 5963)),
     'Canberra':  list(range(2600, 2619)) + list(range(2900, 2921)),
     'Hobart':    list(range(7000, 7055)),
-    'Darwin':    list(range(800, 1000)),  # NT
+    'Darwin':    list(range(0800, 1000)),  # NT
 }
 ALL_CAPITAL_POSTCODES = set()
 for v in CAPITAL_POSTCODES.values():
