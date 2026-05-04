@@ -1,3 +1,0 @@
-    def _fetch_tradie_portal(self) -> List[Dict]:
-        """Tradie portal data is often gated/synthetic — disabled."""
-        return []

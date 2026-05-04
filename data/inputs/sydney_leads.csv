@@ -1,9 +1,0 @@
-# Australian Leads Ingestion Pipeline
-# Place your CSV files here with columns matching lead schema
-# Example: business_name, category, phone, email, city, state, postcode, ...
-
-# Sydney sample input
-Business Name,Category,Phone,Email,City,State,Postcode,Website
-Sydney CBD Dentist,Dentist,02-9231-1000,info@sydneycbddentist.com.au,Sydney,NSW,2000,https://sydneycbdentist.com.au
-Bondi Beach Coffee,Cafe,02-9130-2000,hello@bondibeachcoffee.com.au,Bondi,NSW,2026,https://bondibeachcoffee.com.au
-Newcastle Electrical,Electrician,02-4915-3000,admin@newcastleelectrical.com.au,Newcastle,NSW,2300,https://newcastleelectrical.com.au
