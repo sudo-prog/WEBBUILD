@@ -1,0 +1,43 @@
+# Large data & raw leads (privacy, size)
+data/abn/leads/
+raw_leads/
+*.jsonl
+
+# Temporary / session artifacts
+/tmp/
+*.tmp
+*.cache
+
+# Credentials & secrets
+*.key
+*.pem
+credentials.json
+secrets.yaml
+.env*
+
+# Python caches
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+
+# OS & editor
+.DS_Store
+.idea/
+.vscode/
+
+# Large downloads / scraped assets
+*.zip
+*.tar.gz
+*.mp4
+*.png
+*.jpg
+
+# Logs
+*.log
+
+# Hermes / agent runtime
+.hermes/
+
+# Reports are tracked (see below — not ignored)
+!reports/

@@ -1,0 +1,87 @@
+#!/usr/bin/env python3
+import json, zipfile, re
+from pathlib import Path
+from lxml import etree
+
+ZIP_PARTS = [
+    "/home/thinkpad/data/abn/public_split_1_10.zip",
+    "/home/thinkpad/data/abn/public_split_11_20.zip",
+]
+OUT_DIR = Path("/home/thinkpad/data/abn/processed")
+OUT_DIR.mkdir(parents=True, exist_ok=True)
+
+def parse_abr(elem):
+    rec = {}
+    rec['record_last_updated'] = elem.get('recordLastUpdatedDate')
+    rec['replaced'] = elem.get('replaced')
+    abn_el = elem.find('ABN')
+    if abn_el is not None:
+        rec['abn'] = abn_el.text
+        rec['abn_status'] = abn_el.get('status')
+        rec['abn_status_from'] = abn_el.get('ABNStatusFromDate')
+    et = elem.find('EntityType')
+    if et is not None:
+        rec['entity_type_ind'] = et.findtext('EntityTypeInd')
+        rec['entity_type_text'] = et.findtext('EntityTypeText')
+    main = elem.find('MainEntity')
+    if main is not None:
+        mn = main.find('NonIndividualName')
+        if mn is not None:
+            rec['legal_name'] = mn.findtext('NonIndividualNameText')
+        other = elem.find('OtherEntity')
+        if other is not None:
+            trd = other.find('NonIndividualName')
+            if trd is not None:
+                rec['trading_name'] = trd.findtext('NonIndividualNameText')
+        else:
+            rec['trading_name'] = None
+    else:
+        legal = elem.find('LegalEntity')
+        if legal is not None:
+            indiv = legal.find('IndividualName')
+            if indiv is not None:
+                given = [g.text for g in indiv.findall('GivenName') if g.text]
+                family = indiv.findtext('FamilyName')
+                rec['legal_name'] = ' '.join(given + ([family] if family else []))
+            rec['trading_name'] = None
+    addr = elem.find('BusinessAddress/AddressDetails')
+    if addr is not None:
+        rec['address_state'] = addr.findtext('State')
+        rec['address_postcode'] = addr.findtext('Postcode')
+    asic = elem.find('ASICNumber')
+    if asic is not None:
+        rec['asic_number'] = asic.text
+        rec['asic_number_type'] = asic.get('ASICNumberType')
+    gst = elem.find('GST')
+    if gst is not None:
+        rec['gst_status'] = gst.get('status')
+        rec['gst_status_from'] = gst.get('GSTStatusFromDate')
+    return rec
+
+def process_zip(zip_path):
+    z = zipfile.ZipFile(zip_path)
+    xml_files = sorted([n for n in z.namelist() if n.endswith('.xml')])
+    for xml_name in xml_files:
+        file_id = xml_name.split('.')[0].split('_')[-1]
+        out_path = OUT_DIR / f"abn_part{file_id}.jsonl"
+        print(f"  {xml_name} → {out_path.name}")
+        with z.open(xml_name) as fh:
+            context = etree.iterparse(fh, events=('end',), tag='ABR', recover=True)
+            written = 0
+            with open(out_path, 'w', encoding='utf-8') as out:
+                for event, elem in context:
+                    rec = parse_abr(elem)
+                    if rec:
+                        out.write(json.dumps(rec, ensure_ascii=False) + '\n')
+                        written += 1
+                    elem.clear()
+                    while elem.getprevious() is not None:
+                        del elem.getparent()[0]
+            print(f"    records: {written:,}")
+            context = None
+
+if __name__ == '__main__':
+    for part in ZIP_PARTS:
+        print(f"\n=== {Path(part).name} ===")
+        process_zip(part)
+    print("\n✅ Done.")
