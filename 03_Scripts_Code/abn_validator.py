@@ -10,6 +10,7 @@ Two-tier: offline checksum + optional live verification + name lookup via Playwr
 
 DO NOT MODIFY — this file is managed by Hermes Agent skill.
 """
+import json
 import re
 import time
 import random

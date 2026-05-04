@@ -48,32 +48,10 @@ secrets.yaml
 **/.env
 
 ### Data & Privacy ###
-01_Raw_Data/raw_leads/
-01_Raw_Data/*.jsonl
-01_Raw_Data/*.csv
-01_Raw_Data/*.txt
-02_Input_Assets/data/dork_queries/
-02_Input_Assets/data/inputs/
-02_Input_Assets/data/leads/
-02_Input_Assets/*.jsonl
-02_Input_Assets/*.csv
 
 ### Temporary & Build ###
-04_Working_Files/
-*.bak
-*.original
-*.backup
-*.tmp
-*.temp
 
 ### Archives ###
-06_Archives/
-*.7z
-*.zip
-*.tar.gz
-*.tar.bz2
-*.tar.xz
-*.gz
 
 ### Local & Test ###
 *.local

@@ -71,10 +71,7 @@ _ALLOWED_SUBURBS: Set[str] = set()
 
 # Reject obvious toll-free / placeholder phone patterns (1300, 1800, 190x)
 _PLACEHOLDER_PHONE_RE = re.compile(
-    r"^(?:13[0-9]{2}|1800|190[0-9])"
-    r"(\s*-\s*|\s*)?"
-    r"(?:[0-9]{3}(\s*-\s*|\s*)?[0-9]{3}|[0-9]{6})$",
-    re.IGNORECASE
+    r"^(?:13\d{4}|1800\d{6}|190\d{7})$", re.IGNORECASE
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -268,22 +265,26 @@ def log_ingestion(city: str, source: str, count: int, status: str = "success", e
 
 # ── Main ─────────────────────────────────────────────────────────────────────────
 def main_old():
-    p = argparse.ArgumentParser(description="Enrich qualified leads with ABN verification")
 def main():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(message)s"
+    )
+    log = logging.getLogger("abn_enrichment")
+
+    p = argparse.ArgumentParser(description="Enrich qualified leads with ABN verification")
+    p.add_argument("--city", choices=["sydney", "melbourne", "all"], default="all")
+    p.add_argument("--dry-run", action="store_true")
     p.add_argument(
-        "--city", choices=["sydney","melbourne","all"], default="all",
-        help="Which city leads to process")
-    p.add_argument("--dry-run", action="store_true",
-                   help="Show what would be upserted without touching the database")
-    p.add_argument("--suburbs", default="",
-                   help="Comma-separated list of suburbs to accept (lowercase). Default: all.")
+        "--suburbs", default="",
+        help="Comma-separated suburbs to accept (lowercase). Default: all."
+    )
     args = p.parse_args()
 
-    # Populate global whitelist from flag
     global _ALLOWED_SUBURBS
     _ALLOWED_SUBURBS = {s.strip().lower() for s in args.suburbs.split(",") if s.strip()}
 
-    cities_to_process = [args.city] if args.city != "all" else ["sydney", "melbourne"]
+    cities = [args.city] if args.city != "all" else ["sydney", "melbourne"]
     total_upserted = 0
 
     if _ALLOWED_SUBURBS:
@@ -291,20 +292,26 @@ def main():
     else:
         log.info("Demographics whitelist: disabled (all suburbs accepted)")
 
-    for city in cities_to_process:
-        log.info(f"=== {city.title()} ===")
-        raw_leads  = load_leads(city)
+    for city in cities:
+        log.info(f"
+=== {city.title()} ===")
+        raw_leads = load_leads(city)
         if not raw_leads:
             log.warning(f"No leads passed filters for {city}; skipping.")
             continue
+
         enriched, verified = enrich_with_abn(raw_leads, rate_limit=1.8)
         log.info(f"ABN verified: {verified}/{len(enriched)}")
+
         inserted = upsert_leads(enriched, dry_run=args.dry_run)
         total_upserted += inserted
+
         if not args.dry_run:
             log_ingestion(city, "abn_enrichment", inserted, "success")
 
-    log.info(f"✅ Done — total upserted: {total_upserted}")
+    log.info(f"
+✅ Done — total upserted: {total_upserted}")
+    return 0
 
 
 if __name__ == "__main__":
