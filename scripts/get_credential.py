@@ -69,10 +69,19 @@ def main():
         print(f"Key: {key}")
         print(f"Value: {value[:20]}... (length {len(value)})")
     elif plain:
+        # SECURITY: raw token output — require explicit env var to prevent accidental leaks
+        if os.environ.get('GET_CRED_PLAIN') != '1':
+            print("ERROR: Raw output disabled. Set GET_CRED_PLAIN=1 to enable.", file=sys.stderr)
+            print("Reason: --plain writes raw credential to stdout, which can be captured by", file=sys.stderr)
+            print("shell history, process monitors, or log aggregation. Only use in trusted,", file=sys.stderr)
+            print("ephemeral contexts (e.g., piped directly to a subprocess that clears env).", file=sys.stderr)
+            sys.exit(2)
+        # Env var confirmed — still warn once more
+        print("⚠️  RAW CREDENTIAL OUTPUT — ensure no logging/recording active", file=sys.stderr)
         print(value)  # raw for piping
     else:
-        # default: show full value masked
-        print(f"credentials:github_oauth_token = gh{value[2:22]}...{value[-6:]}")
+        # default: show masked preview
+        print(f"{key} = {value[:10]}...{value[-6:]}")
 
 
 if __name__ == '__main__':

@@ -41,3 +41,6 @@ __pycache__/
 
 # Reports are tracked (see below — not ignored)
 !reports/
+
+# Local mempalace vaults (user home)
+.mempalace/
