@@ -237,23 +237,35 @@ def upsert_leads(leads: List[Dict], dry_run: bool = False) -> int:
             log.info(f"  • {l['business_name']} ({l['city']}) | ABN: {l.get('abn','-')}")
         return len(leads)
 
+    conn = connect_db()
+    cur = conn.cursor()
+    # Pre-fetch existing lead_ids for this batch to avoid UNIQUE violation
+    names_cities = [(l["business_name"], l["city"]) for l in leads]
+    existing = {}
+    for bn, ct in names_cities:
+        cur.execute("SELECT lead_id FROM leads WHERE business_name = %s AND city = %s LIMIT 1", (bn, ct))
+        row = cur.fetchone()
+        if row:
+            existing[(bn, ct)] = row[0]
     rows = []
     for l in leads:
         name = l["business_name"]
         city = l["city"]
-        state = l["state"]
-        normalized_name = re.sub(r"[^a-z0-9]", "-", name.lower())
-        suffix = hashlib.md5(f"{state.lower()}-{normalized_name}-{city}".encode()).hexdigest()[:12]
-        lead_id = f"{state.lower()}-{normalized_name[:40]}-{suffix}"
+        key = (name, city)
+        if key in existing:
+            lead_id = existing[key]
+        else:
+            state = l["state"]
+            normalized_name = re.sub(r"[^a-z0-9]", "-", name.lower())
+            suffix = hashlib.md5(f"{state.lower()}-{normalized_name}-{city}".encode()).hexdigest()[:12]
+            lead_id = f"{state.lower()}-{normalized_name[:40]}-{suffix}"
         rows.append((
             lead_id, l["source"], str(uuid.uuid4()),
             name, l["category"], l["phone"], l["email"], l["website"],
-            city, state, l["suburb"], l["postcode"], l["address_full"],
+            city, l["state"], l["suburb"], l["postcode"], l["address_full"],
             l.get("abn"), l.get("lead_score")
         ))
 
-    conn = connect_db()
-    cur = conn.cursor()
     execute_batch(cur, UPSERT_SQL, rows, page_size=50)
     conn.commit()
     cur.close()

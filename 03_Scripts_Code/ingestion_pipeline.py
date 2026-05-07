@@ -245,10 +245,8 @@ def validate_lead(raw: Dict, city_config: Dict, logger: logging.Logger) -> Optio
     if not category:
         return None
 
-    lead_id = raw.get('lead_id')
-    if not lead_id:
-        slug = business_name.lower().replace(' ', '-')[:50]
-        lead_id = f"{city_config.get('state', 'UNK').lower()}-{slug}-{str(uuid.uuid4())[:8]}"
+    from lead_id_utils import patch_validate_lead_id
+    lead_id = patch_validate_lead_id(raw, city_config)
 
     state = raw.get('state') or city_config.get('state', '')
     if state not in AUSTRALIAN_STATES:

@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
 """
-WEBBUILD — Fixed Ingestion Pipeline
-Fixes applied from audit:
-  1. abn_validator.py: added missing `import json` at top
-  2. abn_enrichment.py: removed duplicate def main()
-  3. Schema mismatch: import_leads.py now uses lead_id (not business_name+city) as conflict key
-  4. Unified upload function that handles both local Supabase (port 6543) and remote
+WEBBUILD — Fixed Ingestion Pipeline  [patched: lead_id canonicalised]
+
+Bug fixed in this version:
+  - lead_id was generated with re.sub(r'[^a-z0-9]', '-', name)[:40] + random uuid4 suffix.
+  - ingestion_pipeline.py used name.replace(' ', '-')[:50] + random uuid4 suffix.
+  - The two produced DIFFERENT IDs for the same business (e.g. "J & D Plumbing"
+    became "j---d-plumbing..." vs "j-&-d-plumbing..."), so ON CONFLICT(lead_id)
+    never matched, inserting duplicates that then crashed on the
+    (business_name, city) UNIQUE constraint.
+  - Fix: use lead_id_utils.make_lead_id() everywhere — deterministic uuid5-based
+    suffix, consistent slug normalisation, stable across all scripts.
 
 Usage:
   python pipeline_fixed.py --city sydney --source abn_bulk --limit 500
@@ -23,6 +28,11 @@ try:
 except ImportError:
     print("ERROR: pip install psycopg2-binary")
     sys.exit(1)
+
+# ── Import canonical lead_id utility ─────────────────────────────────────────
+# lead_id_utils.py must live in the same directory as this script.
+sys.path.insert(0, str(Path(__file__).parent))
+from lead_id_utils import patch_validate_lead_id  # noqa: E402
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -64,7 +74,6 @@ def load_config() -> Dict:
     cfg_path = PROJECT_ROOT / "config" / "settings.json"
     if cfg_path.exists():
         return json.loads(cfg_path.read_text())
-    # Fallback to env vars
     return {
         "postgres": {
             "host": os.getenv("PG_HOST", "127.0.0.1"),
@@ -81,7 +90,6 @@ def load_config() -> Dict:
 def connect_db(cfg: Dict) -> psycopg2.extensions.connection:
     pg = cfg["postgres"]
     url = cfg.get("supabase", {}).get("url", "")
-    # Extract host/port from supabase URL if present
     if url:
         clean = url.replace("http://", "").replace("https://", "")
         if ":" in clean:
@@ -155,9 +163,8 @@ def validate_lead(raw: Dict, city_cfg: Dict) -> Optional[Dict]:
 
     tier = "HIGH" if score >= 75 else "MEDIUM" if score >= 55 else "LOW"
 
-    lead_id = raw.get("lead_id") or (
-        f"{state.lower()}-{re.sub(r'[^a-z0-9]', '-', name.lower())[:40]}-{str(uuid.uuid4())[:8]}"
-    )
+    # ── FIXED: use canonical lead_id (was: random uuid4 suffix + inconsistent slug) ──
+    lead_id = patch_validate_lead_id(raw, city_cfg)
 
     return {
         "lead_id": lead_id,
@@ -185,7 +192,6 @@ def validate_lead(raw: Dict, city_cfg: Dict) -> Optional[Dict]:
 
 # ── Fetchers ──────────────────────────────────────────────────────────────────
 def fetch_manual_csv(city_key: str) -> List[Dict]:
-    """Load CSV from data/inputs/<city>_leads.csv"""
     path = PROJECT_ROOT / "data" / "inputs" / f"{city_key}_leads.csv"
     if not path.exists():
         return []
@@ -199,7 +205,6 @@ def fetch_manual_csv(city_key: str) -> List[Dict]:
 
 
 def fetch_abn_leads(city_key: str, limit: int = 500) -> List[Dict]:
-    """Load from pre-extracted ABN trade JSONL files"""
     leads_dir = Path("/home/thinkpad/data/abn/leads")
     state = CITY_MAP[city_key]["state"]
     results = []
@@ -226,7 +231,6 @@ def fetch_abn_leads(city_key: str, limit: int = 500) -> List[Dict]:
 
 
 def fetch_yellow_pages(city_key: str, limit: int = 500) -> List[Dict]:
-    """Load from pre-scraped Yellow Pages JSONL batch files"""
     yp_dir = PROJECT_ROOT / "raw_leads" / "yellow_pages_batch"
     city_name = CITY_MAP[city_key]["city"]
     results = []
@@ -242,13 +246,11 @@ def fetch_yellow_pages(city_key: str, limit: int = 500) -> List[Dict]:
                     try:
                         rec = json.loads(line)
                         if rec.get("city", "").lower() == city_name.lower():
-                            if not rec.get("yp_url"):  # no website
-                                results.append({**rec, "business_name": rec.get("business_name",""),
-                                               "source": "yellow_pages_batch"})
+                            if not rec.get("yp_url"):
+                                results.append({**rec, "source": "yellow_pages_batch"})
                     except Exception:
                         continue
 
-    # Also check per-city JSON files
     if not results:
         yp_dir2 = PROJECT_ROOT / "raw_leads" / "yellow_pages"
         if yp_dir2.exists():
@@ -256,7 +258,8 @@ def fetch_yellow_pages(city_key: str, limit: int = 500) -> List[Dict]:
                 try:
                     data = json.loads(jf.read_text())
                     for rec in data:
-                        if len(results) >= limit: break
+                        if len(results) >= limit:
+                            break
                         if not rec.get("has_website", True):
                             results.append({**rec, "source": "yellow_pages"})
                 except Exception:
@@ -318,12 +321,12 @@ def upsert_leads(conn, leads: List[Dict], batch_size: int = 100) -> Tuple[int, i
     failed = 0
     with conn.cursor() as cur:
         for i in range(0, len(rows), batch_size):
-            batch = rows[i:i+batch_size]
+            batch = rows[i:i + batch_size]
             try:
                 execute_batch(cur, UPSERT_SQL, batch, page_size=batch_size)
                 inserted += len(batch)
             except Exception as e:
-                log.error(f"Batch {i//batch_size+1} failed: {e}")
+                log.error(f"Batch {i // batch_size + 1} failed: {e}")
                 conn.rollback()
                 failed += len(batch)
     conn.commit()
@@ -331,7 +334,6 @@ def upsert_leads(conn, leads: List[Dict], batch_size: int = 100) -> Tuple[int, i
 
 
 def log_ingestion(conn, source: str, city: str, count: int, status: str = "success"):
-    """Write audit record to ingestion_log"""
     try:
         with conn.cursor() as cur:
             cur.execute("""
@@ -339,7 +341,7 @@ def log_ingestion(conn, source: str, city: str, count: int, status: str = "succe
                     (batch_id, source_name, city_target, state_target, record_count, status, started_at, completed_at)
                 VALUES (%s, %s, %s, %s, %s, %s, NOW(), NOW())
                 ON CONFLICT DO NOTHING
-            """, (str(uuid.uuid4()), source, city, CITY_MAP.get(city.lower(), {}).get("state",""), count, status))
+            """, (str(uuid.uuid4()), source, city, CITY_MAP.get(city.lower(), {}).get("state", ""), count, status))
         conn.commit()
     except Exception as e:
         log.warning(f"Could not write ingestion_log: {e}")
@@ -348,15 +350,13 @@ def log_ingestion(conn, source: str, city: str, count: int, status: str = "succe
 # ── Main pipeline ─────────────────────────────────────────────────────────────
 def run_city(city_key: str, source: str, limit: int, dry_run: bool, cfg: Dict) -> Dict:
     city_cfg = CITY_MAP[city_key]
-    log.info(f"\n{'='*55}")
+    log.info(f"\n{'=' * 55}")
     log.info(f"City: {city_cfg['city']} ({city_cfg['state']})  source={source}  limit={limit}  dry={dry_run}")
-    log.info(f"{'='*55}")
+    log.info(f"{'=' * 55}")
 
-    # 1. Fetch
     raw = fetch_leads(city_key, source, limit)
     log.info(f"Fetched {len(raw)} raw leads")
 
-    # 2. Validate
     valid = [v for r in raw if (v := validate_lead(r, city_cfg))]
     skipped = len(raw) - len(valid)
     log.info(f"Validated: {len(valid)} OK, {skipped} skipped")
@@ -368,11 +368,11 @@ def run_city(city_key: str, source: str, limit: int, dry_run: bool, cfg: Dict) -
     if dry_run:
         log.info("[DRY-RUN] Would insert/upsert:")
         for l in valid[:5]:
-            log.info(f"  {l['business_name']} | {l['category']} | {l['city']} | score={l['lead_score']}")
-        if len(valid) > 5: log.info(f"  … and {len(valid)-5} more")
+            log.info(f"  {l['business_name']} | {l['lead_id']} | score={l['lead_score']}")
+        if len(valid) > 5:
+            log.info(f"  … and {len(valid) - 5} more")
         return {"city": city_key, "fetched": len(raw), "valid": len(valid), "inserted": len(valid), "failed": 0}
 
-    # 3. Upload
     try:
         conn = connect_db(cfg)
         inserted, failed = upsert_leads(conn, valid, cfg["ingestion"].get("batch_size", 100))
@@ -386,18 +386,18 @@ def run_city(city_key: str, source: str, limit: int, dry_run: bool, cfg: Dict) -
 
 
 def print_summary(results: List[Dict]):
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("WEBBUILD PIPELINE SUMMARY")
-    print("="*60)
+    print("=" * 60)
     for r in results:
-        icon = "✅" if r.get("inserted",0) > 0 else "⚠️"
-        print(f"{icon} {r['city']:<12} fetched={r.get('fetched',0):>4}  valid={r.get('valid',0):>4}  "
-              f"inserted={r.get('inserted',0):>4}  failed={r.get('failed',0):>3}")
-    total_i = sum(r.get("inserted",0) for r in results)
-    total_f = sum(r.get("failed",0) for r in results)
-    total_r = sum(r.get("fetched",0) for r in results)
+        icon = "✅" if r.get("inserted", 0) > 0 else "⚠️"
+        print(f"{icon} {r['city']:<12} fetched={r.get('fetched', 0):>4}  valid={r.get('valid', 0):>4}  "
+              f"inserted={r.get('inserted', 0):>4}  failed={r.get('failed', 0):>3}")
+    total_i = sum(r.get("inserted", 0) for r in results)
+    total_f = sum(r.get("failed", 0) for r in results)
+    total_r = sum(r.get("fetched", 0) for r in results)
     print(f"\nTOTAL  fetched={total_r}  inserted={total_i}  failed={total_f}")
-    print("="*60)
+    print("=" * 60)
 
 
 def main():
@@ -405,7 +405,7 @@ def main():
     p.add_argument("--city", choices=list(CITY_MAP.keys()), help="Single city")
     p.add_argument("--all", action="store_true", help="Run all 8 cities")
     p.add_argument("--source", default="abn_bulk",
-                   choices=["abn_bulk","yellow_pages","abn_yp_merge","manual_csv"],
+                   choices=["abn_bulk", "yellow_pages", "abn_yp_merge", "manual_csv"],
                    help="Lead source")
     p.add_argument("--limit", type=int, default=500, help="Max leads per city")
     p.add_argument("--dry-run", action="store_true", help="Validate only, no DB writes")
