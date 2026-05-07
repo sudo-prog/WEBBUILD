@@ -5,8 +5,8 @@ Streams all 20 XML files from both ZIPs → filters → writes JSONL → imports
 
 FILTERS (customizable):
   - abn_status: only ACT (active)
-  - entity_type_ind: keep only small business types (PRV, IND, FPT, SMF, PTR, DTT, DIT, FUT, STR, OIE?)
-    Note: exclude large entities like PUB (public companies), GOV, FMD, etc.
+  - entity_type_ind: keep only trading business types (PRV, IND, FPT, PTR, OIE)
+    Note: exclude SMF/FUT/DTT/DIT/STR (trusts/funds - not website customers)
   - address_state: all 8 states/territories
   - address_postcode: filter to capital city regions only (optional)
 """
@@ -26,7 +26,7 @@ OUT_DIR = Path("/home/thinkpad/data/abn/processed")
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Filter: keep only these entity types (small business indicator)
-KEEP_ENTITY_TYPES = {'PRV', 'IND', 'FPT', 'SMF', 'PTR', 'DTT', 'DIT', 'FUT', 'STR', 'OIE'}
+KEEP_ENTITY_TYPES = {'PRV', 'IND', 'FPT', 'PTR', 'OIE'}
 
 # Capital city postcode ranges (inclusive) — from Australia Post
 CAPITAL_POSTCODES = {
@@ -141,7 +141,7 @@ def process_all():
                     elem.clear()
                     while elem.getprevious() is not None:
                         del elem.getparent()[0]
-            print(f"  → kept {keaned} records")
+            print(f"  → kept {kept} records")
             context = None
             fh.close()
     print(f"\n✅ Total records written: {total_written:,}")

@@ -26,6 +26,7 @@ Usage auto:
 """
 
 import json, argparse, sqlite3, re, sys, os
+from datetime import datetime
 from pathlib import Path
 from typing import List, Dict
 

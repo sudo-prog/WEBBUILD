@@ -162,7 +162,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     leads = scrape_yellow_pages_sync(args.city, args.state, max_pages=args.pages)
-    out = Path(f"/home/thinkpad/Projects/supabase_australia/raw_leads/yp_{args.city.lower()}_{int(time.time())}.json")
+    out = Path(f"/home/thinkpad/Projects/active/WEBBUILD/supabase_australia/raw_leads/yp_{args.city.lower()}_{int(time.time())}.json")
     out.parent.mkdir(exist_ok=True)
     out.write_text(json.dumps(leads, indent=2))
     print(f"✓ {len(leads)} leads → {out}")

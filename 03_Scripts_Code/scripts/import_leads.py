@@ -25,7 +25,7 @@ log = logging.getLogger("import_leads")
 # ── Supabase credentials (same cascade as abn_enrichment.py) ────────────────────
 SUPABASE_URL   = os.getenv("SUPABASE_URL", "http://localhost:6543")
 SUPABASE_DB    = os.getenv("SUPABASE_DB", "postgres")
-SUPABASE_USER  = os.getenv("SUPABASE_USER", "supabase_service")
+SUPABASE_USER  = os.getenv("SUPABASE_USER", "postgres")
 
 try:
     SUPABASE_PASS = os.getenv("SUPABASE_PASSWORD")
@@ -72,7 +72,7 @@ def upsert_leads(leads: List[Dict], source_tag: str) -> int:
         %s, %s, %s, %s,
         NOW(), NOW()
     )
-    ON CONFLICT (business_name, city) DO UPDATE SET
+    ON CONFLICT (lead_id) DO UPDATE SET
         phone       = COALESCE(EXCLUDED.phone, leads.phone),
         email       = COALESCE(EXCLUDED.email, leads.email),
         abn         = EXCLUDED.abn,
@@ -105,7 +105,7 @@ def upsert_leads(leads: List[Dict], source_tag: str) -> int:
     return inserted
 
 
-def log_ingestion(source: str, city: str, count: int, status: str = "success", error: str = None):
+def log_ingestion(source: str, city: str, count: int, status: str = "completed", error: str = None):
     conn = connect_db()
     cur = conn.cursor()
     cur.execute("""

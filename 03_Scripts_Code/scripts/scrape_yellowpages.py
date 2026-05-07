@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Real Yellow Pages AU scraper — filters: email present AND no website."""
+"""
+DEPRECATED — This scraper calls resp.json() on HTML responses from yellowpages.com.au
+(yellowpages.com.au returns HTML, not JSON). This has NEVER worked.
+Use scrape_yp_playwright.py instead, which uses Playwright correctly.
+
+DO NOT USE THIS FILE.
+"""
 import requests, json, time, sys
 from pathlib import Path
 

@@ -33,41 +33,63 @@ def is_in_target_city(postcode_str: str, city_key: str) -> bool:
 
 
 def parse_search_results(html: str) -> List[Dict]:
-    """Parse the ABN search results table and return list of lead dicts."""
+    """
+    Parse the ABN search results table using BeautifulSoup (not regex).
+    Replaced regex-based parsing which broke silently on nested tags.
+    """
     leads = []
-    # Find table rows: each <tr> after header
-    rows = re.findall(r'<tr>\s*<td>.*?</td>\s*<td>.*?</td>\s*<td>.*?</td>\s*<td>.*?</td>\s*</tr>', html, re.DOTALL)
+    try:
+        from bs4 import BeautifulSoup
+    except ImportError:
+        print("[WARN] BeautifulSoup not installed — falling back to lxml")
+        try:
+            from lxml.html import fromstring
+            soup = fromstring(html)
+            # Use basic XPath as fallback
+            return _parse_with_lxml(html)
+        except ImportError:
+            print("[WARN] Neither BeautifulSoup nor lxml available — using regex fallback")
+            return _parse_with_regex(html)
+
+    soup = BeautifulSoup(html, 'html.parser')
+    # Find all table rows (after header)
+    rows = soup.select('table tbody tr, table tr')
     print(f"  Found {len(rows)} result rows in table")
+
     for row in rows:
         try:
-            # ABN cell: contains link + active status
-            abn_match = re.search(r'<a[^>]*?/ABN/View\?abn=(\d+)', row, re.I)
+            cells = row.find_all('td')
+            if len(cells) < 4:
+                continue
+
+            # ABN: first cell contains a link
+            abn_link = cells[0].find('a', href=True)
+            if not abn_link:
+                continue
+            abn_match = re.search(r'/ABN/View\?abn=(\d+)', abn_link['href'])
             if not abn_match:
                 continue
             abn = abn_match.group(1)
-            # Format as 11-digit with spaces: 11 000 000 948
+            # Format as 11-digit with spaces
             abn_fmt = f"{abn[:2]} {abn[2:5]} {abn[5:8]} {abn[8:11]}"
-            
-            # Active?
-            active = 1 if re.search(r'<span[^>]*?class=["\'][^"\']*?active[^"\']*?["\'][^>]*>Active</span>', row, re.I) else 0
-            if not active:
+
+            # Active status check
+            active_span = cells[0].find('span', class_=re.compile(r'active', re.I))
+            if not active_span:
                 continue  # skip inactive
-            
-            # Business name — extract text from second <td>
-            # name_match = re.search(r'<td[^>]*?>\s*(?:<a[^>]*?>.*?</a>\s*)?(.*?)</td>', row, re.DOTALL)  # too greedy
-            # Better: split by <td>
-            tds = re.findall(r'<td[^>]*?>(.*?)</td>', row, re.DOTALL)
-            if len(tds) < 4:
-                continue
-            # tds[0] = ABN, tds[1] = Name, tds[2] = Type, tds[3] = Location
-            name = re.sub(r'<[^>]+>', '', tds[1]).strip()
-            entity_type = re.sub(r'<[^>]+>', '', tds[2]).strip()
-            location = re.sub(r'<[^>]+>', '', tds[3]).strip()
-            # Location format: "4171         QLD" — extract postcode and state
+
+            # Business name from second cell
+            name = cells[1].get_text(strip=True)
+
+            # Entity type from third cell
+            entity_type = cells[2].get_text(strip=True)
+
+            # Location from fourth cell: "4171 QLD"
+            location = cells[3].get_text(strip=True)
             loc_parts = location.split()
             postcode = ''.join(filter(str.isdigit, loc_parts[0])) if loc_parts else ""
             state = loc_parts[-1].upper() if len(loc_parts) > 1 else ""
-            
+
             leads.append({
                 "abn": abn_fmt,
                 "business_name": name,
@@ -77,6 +99,71 @@ def parse_search_results(html: str) -> List[Dict]:
                 "location_raw": location,
             })
         except Exception as e:
+            continue
+
+    return leads
+
+
+def _parse_with_lxml(html: str) -> List[Dict]:
+    """Fallback lxml HTML parser when BeautifulSoup unavailable."""
+    from lxml.html import fromstring
+    doc = fromstring(html)
+    leads = []
+    for row in doc.xpath('//table//tr[td]'):
+        cells = row.xpath('td')
+        if len(cells) < 4:
+            continue
+        try:
+            abn_text = cells[0].text_content().strip()
+            abn_digits = ''.join(filter(str.isdigit, abn_text))
+            if len(abn_digits) < 11:
+                continue
+            abn_fmt = f"{abn_digits[:2]} {abn_digits[2:5]} {abn_digits[5:8]} {abn_digits[8:11]}"
+            name = cells[1].text_content().strip()
+            entity_type = cells[2].text_content().strip()
+            location = cells[3].text_content().strip()
+            loc_parts = location.split()
+            postcode = ''.join(filter(str.isdigit, loc_parts[0])) if loc_parts else ""
+            state = loc_parts[-1].upper() if len(loc_parts) > 1 else ""
+            leads.append({
+                "abn": abn_fmt, "business_name": name,
+                "entity_type": entity_type, "postcode": postcode,
+                "state": state, "location_raw": location,
+            })
+        except Exception:
+            continue
+    return leads
+
+
+def _parse_with_regex(html: str) -> List[Dict]:
+    """Original regex fallback for when neither parser is available."""
+    leads = []
+    rows = re.findall(r'<tr>\s*<td>.*?</td>\s*<td>.*?</td>\s*<td>.*?</td>\s*<td>.*?</td>\s*</tr>', html, re.DOTALL)
+    for row in rows:
+        try:
+            abn_match = re.search(r'<a[^>]*?/ABN/View\?abn=(\d+)', row, re.I)
+            if not abn_match:
+                continue
+            abn = abn_match.group(1)
+            abn_fmt = f"{abn[:2]} {abn[2:5]} {abn[5:8]} {abn[8:11]}"
+            active = 1 if re.search(r'<span[^>]*?class=["\'][^"\']*?active', row, re.I) else 0
+            if not active:
+                continue
+            tds = re.findall(r'<td[^>]*?>(.*?)</td>', row, re.DOTALL)
+            if len(tds) < 4:
+                continue
+            name = re.sub(r'<[^>]+>', '', tds[1]).strip()
+            entity_type = re.sub(r'<[^>]+>', '', tds[2]).strip()
+            location = re.sub(r'<[^>]+>', '', tds[3]).strip()
+            loc_parts = location.split()
+            postcode = ''.join(filter(str.isdigit, loc_parts[0])) if loc_parts else ""
+            state = loc_parts[-1].upper() if len(loc_parts) > 1 else ""
+            leads.append({
+                "abn": abn_fmt, "business_name": name,
+                "entity_type": entity_type, "postcode": postcode,
+                "state": state, "location_raw": location,
+            })
+        except Exception:
             continue
     return leads
 

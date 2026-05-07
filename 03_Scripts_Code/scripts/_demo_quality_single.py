@@ -2,7 +2,7 @@
 import sys, json
 sys.path.insert(0, '.')
 
-from lead_verifier_v2 import layer1
+from lead_verifier_v2 import layer1, lookup_abn
 
 # One genuine ABN match from cross-reference
 lead = {
@@ -15,5 +15,6 @@ lead = {
     "abn_status_from": "2020-01-15",
 }
 
-res = layer1(lead)
+abn_rec = lookup_abn(lead.get("abn"))
+res = layer1(lead, abn_rec)
 print(json.dumps(res, indent=2))

@@ -1,26 +1,9 @@
 #!/usr/bin/env python3
 """
-ABN BulkExtract XML Parser — streams all 20 part files, extracts every ABN record,
-and writes to JSONL (one record per line) for downstream enrichment/import.
+DEPRECATED — Loads entire 350MB+ XML into memory via z.read(xml_name).decode()
+(line 173). The streaming code (line 168) is a pass that does nothing. OOM risk.
 
-Fields extracted per record:
-  - abn (str)
-  - abn_status (ACT/CAN)
-  - abn_status_from (date str)
-  - record_last_updated (date str)
-  - replaced (Y/N)
-  - entity_type_ind (PUB/PRV/IND/...)
-  - entity_type_text (full description)
-  - legal_name (from MainEntity NonIndividualName type=MN, or Individual Given+Family)
-  - trading_name (from OtherEntity NonIndividualName type=TRD, if present)
-  - address_state ( NSW|VIC|QLD|WA|SA|TAS|NT|ACT|AAT )
-  - address_postcode (str)
-  - asic_number (str)
-  - asic_number_type (str)
-  - gst_status (ACT/CAN/NON)
-  - gst_status_from (date str)
-
-Output: /home/thinkpad/data/abn/processed/abn_records_<part>.jsonl
+DO NOT USE THIS FILE. Use abn_stream_parser_v2.py (lxml iterparse) instead.
 """
 
 import json

@@ -19,7 +19,7 @@ ranges = {
 for rng in ranges.values():
     for lo, hi in rng:
         CAPITAL_POSTCODES.update(range(lo, hi+1))
-KEEP_ENTITY_TYPES = {'PRV','IND','FPT','SMF','PTR','DTT','DIT','FUT','STR','OIE'}
+KEEP_ENTITY_TYPES = {'PRV', 'IND', 'FPT', 'PTR', 'OIE'}
 
 def parse_abr(elem):
     rec = {}

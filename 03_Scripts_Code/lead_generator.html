@@ -828,10 +828,10 @@
         <label>User</label>
         <input type="text" id="cfgUser" value="supabase_service">
       </div>
-      <div class="form-group">
-        <label>Password</label>
-        <input type="text" id="cfgPass" value="supabase_service_1777698346">
-      </div>
+       <div class="form-group">
+         <label>Password</label>
+         <input type="password" id="cfgPass" value="" placeholder="Enter service password">
+       </div>
       <div class="form-group">
         <label>Batch Size</label>
         <input type="number" id="cfgBatch" value="100" min="10" max="500">
@@ -861,10 +861,10 @@ const STATE = {
   sessionUploaded: 0,
   cityFilter: null,
   config: {
-    url: 'http://localhost:6543',
+    url: 'https://psnosfonkujbcxdcrnpu.supabase.co',
     db: 'postgres',
-    user: 'supabase_service',
-    pass: 'supabase_service_1777698346',
+    user: 'postgres',
+    pass: '',
     batch: 100
   }
 };

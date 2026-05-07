@@ -1,18 +1,25 @@
 #!/usr/bin/env python3
 """
-WEBBUILD — Fixed Ingestion Pipeline
+WEBBUILD — Quality-Focused Ingestion Pipeline (500MB Supabase Limit)
 Fixes applied from audit:
-  1. abn_validator.py: added missing `import json` at top
-  2. abn_enrichment.py: removed duplicate def main()
-  3. Schema mismatch: import_leads.py now uses lead_id (not business_name+city) as conflict key
-  4. Unified upload function that handles both local Supabase (port 6543) and remote
+   1. abn_validator.py: added missing `import json` at top
+   2. abn_enrichment.py: removed duplicate def main()
+   3. Schema mismatch: import_leads.py now uses lead_id (not business_name+city) as conflict key
+   4. Unified upload function that handles both local Supabase (port 6543) and remote
+   5. QUALITY FILTERING: Only target industries + MEDIUM/HIGH quality leads (500MB limit)
 
-Usage:
-  python pipeline_fixed.py --city sydney --source abn_bulk --limit 500
-  python pipeline_fixed.py --all --source yellow_pages
-  python pipeline_fixed.py --city melbourne --dry-run
+Usage (500MB Supabase Limit - Quality Filtering):
+   python pipeline_fixed.py --city sydney --source abn_bulk --limit 500
+   python pipeline_fixed.py --all --source yellow_pages
+   python pipeline_fixed.py --city melbourne --dry-run
+
+QUALITY FILTERS:
+- Only target industries: plumber, electrician, builder, painter, carpenter, roofer, solar, air conditioning, flooring, kitchen, mechanic, pest control
+- Only MEDIUM/HIGH quality leads (score >= 55)
+- No LOW quality leads to save storage space
 """
 import os, sys, json, re, time, random, logging, argparse, csv, uuid
+import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -28,7 +35,7 @@ except ImportError:
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("webbuild")
 
-PROJECT_ROOT = Path(__file__).parent
+PROJECT_ROOT = Path(__file__).parent.parent
 
 # ── Cities ────────────────────────────────────────────────────────────────────
 CITY_MAP = {
@@ -40,6 +47,13 @@ CITY_MAP = {
     "hobart":    {"state": "TAS", "city": "Hobart"},
     "darwin":    {"state": "NT",  "city": "Darwin"},
     "canberra":  {"state": "ACT", "city": "Canberra"},
+}
+
+# ── Target Industries (500MB Storage Limit) ────────────────────────────────────
+TARGET_INDUSTRIES = {
+    "plumber", "electrician", "builder", "painter", "carpenter",
+    "roofer", "solar", "air conditioning", "flooring", "kitchen",
+    "mechanic", "pest control"
 }
 
 # ── Trade keywords ────────────────────────────────────────────────────────────
@@ -67,10 +81,10 @@ def load_config() -> Dict:
     # Fallback to env vars
     return {
         "postgres": {
-            "host": os.getenv("PG_HOST", "127.0.0.1"),
-            "port": int(os.getenv("PG_PORT", "6543")),
+            "host": os.getenv("PG_HOST", "db.psnosfonkujbcxdcrnpu.supabase.co"),
+            "port": int(os.getenv("PG_PORT", "5432")),
             "database": os.getenv("PG_DATABASE", "postgres"),
-            "user": os.getenv("PG_USER", "supabase_service"),
+            "user": os.getenv("PG_USER", "postgres"),
             "password": os.getenv("PG_PASSWORD", ""),
         },
         "ingestion": {"batch_size": 100}
@@ -102,9 +116,12 @@ def normalise_phone(raw: Optional[str]) -> Optional[str]:
     if not raw:
         return None
     raw = raw.strip()
-    if _PLACEHOLDER_PHONE.match(raw):
-        return None
+    # Remove all non-digit characters to check for placeholder patterns
     digits = re.sub(r"[^\d]", "", raw)
+    # Check if this is a placeholder number (13, 1300, 1800, 190)
+    if re.fullmatch(r"^(?:13\d{4}|1300\d{6}|1800\d{6}|190\d{7})$", digits):
+        return None
+    # Now normalize based on the cleaned digits
     if digits.startswith("04") and len(digits) == 10:
         return f"+61{digits[1:]}"
     elif digits.startswith("0") and 9 <= len(digits) <= 10:
@@ -112,9 +129,6 @@ def normalise_phone(raw: Optional[str]) -> Optional[str]:
     elif digits.startswith("61") and len(digits) == 11:
         return f"+{digits}"
     return raw
-
-
-# ── Category detection ────────────────────────────────────────────────────────
 def detect_category(text: str) -> Optional[str]:
     text = text.lower()
     for kw, cat in KEYWORD_TO_CATEGORY.items():
@@ -132,11 +146,16 @@ def validate_lead(raw: Dict, city_cfg: Dict) -> Optional[Dict]:
         return None
 
     category = (raw.get("category") or detect_category(name) or "trade").strip()
+
+    # STRICT INDUSTRY FILTERING - Only upload target industries (500MB limit)
+    if category.lower() not in TARGET_INDUSTRIES:
+        return None  # Skip non-target industries to save storage
+
     state = (raw.get("state") or city_cfg.get("state", "")).upper()
     if state not in AUSTRALIAN_STATES:
         return None
 
-    # Website rejection — key filter
+    # Website rejection — key filter (keep as is, but now with industry filtering)
     website = (raw.get("website") or "").strip()
     if website and website.lower() not in ("", "n/a", "null", "none"):
         return None
@@ -153,11 +172,22 @@ def validate_lead(raw: Dict, city_cfg: Dict) -> Optional[Dict]:
     if raw.get("gst_registered"): score += 10
     score = min(100, score)
 
+    # QUALITY FILTER - Only upload HIGH and MEDIUM quality leads (500MB limit)
     tier = "HIGH" if score >= 75 else "MEDIUM" if score >= 55 else "LOW"
+    if tier == "LOW":
+        return None  # Skip LOW quality leads to save storage
 
-    lead_id = raw.get("lead_id") or (
-        f"{state.lower()}-{re.sub(r'[^a-z0-9]', '-', name.lower())[:40]}-{str(uuid.uuid4())[:8]}"
-    )
+    if raw.get("lead_id") is None:
+        # Compute deterministic suffix based on state, normalized name, and city
+        city_name = city_cfg["city"]
+        normalized_name = re.sub(r"[^a-z0-9]", "-", name.lower())
+        hash_input = f"{state.lower()}-{normalized_name}-{city_name}".encode()
+        suffix = hashlib.md5(hash_input).hexdigest()[:12]
+        lead_id_val = f"{state.lower()}-{normalized_name[:40]}-{suffix}"
+    else:
+        lead_id_val = raw.get("lead_id")
+    lead_id = lead_id_val
+    log.info(f'✅ QUALITY LEAD: name={name!r}, category={category}, tier={tier}, score={score}, state={state}')
 
     return {
         "lead_id": lead_id,
@@ -296,7 +326,7 @@ INSERT INTO leads (
     %s, %s, %s,
     %s, %s
 )
-ON CONFLICT (lead_id) DO UPDATE SET
+ON CONFLICT (business_name, city) DO UPDATE SET
     phone      = COALESCE(EXCLUDED.phone, leads.phone),
     email      = COALESCE(EXCLUDED.email, leads.email),
     abn        = COALESCE(EXCLUDED.abn,   leads.abn),
@@ -308,7 +338,7 @@ def upsert_leads(conn, leads: List[Dict], batch_size: int = 100) -> Tuple[int, i
     rows = [(
         l["lead_id"], l["source"], l["ingestion_batch_id"],
         l["business_name"], l.get("abn"), l["category"],
-        l.get("phone"), l.get("email"), None,
+        l.get("phone"), l.get("email"), l.get("website"),
         "Australia", l["state"], l["city"], l.get("suburb"), l.get("postcode"), l.get("address_full"),
         l.get("lead_score", 50), l.get("tier", "LOW"), True,
         l["created_at"], l["updated_at"]
@@ -330,7 +360,7 @@ def upsert_leads(conn, leads: List[Dict], batch_size: int = 100) -> Tuple[int, i
     return inserted, failed
 
 
-def log_ingestion(conn, source: str, city: str, count: int, status: str = "success"):
+def log_ingestion(conn, source: str, city: str, count: int, status: str = "completed"):
     """Write audit record to ingestion_log"""
     try:
         with conn.cursor() as cur:
@@ -356,10 +386,10 @@ def run_city(city_key: str, source: str, limit: int, dry_run: bool, cfg: Dict) -
     raw = fetch_leads(city_key, source, limit)
     log.info(f"Fetched {len(raw)} raw leads")
 
-    # 2. Validate
+    # 2. Validate (QUALITY FILTER: Only target industries + MEDIUM/HIGH tier)
     valid = [v for r in raw if (v := validate_lead(r, city_cfg))]
     skipped = len(raw) - len(valid)
-    log.info(f"Validated: {len(valid)} OK, {skipped} skipped")
+    log.info(f"Quality filtered: {len(valid)} accepted, {skipped} skipped (only target industries + MEDIUM/HIGH quality)")
 
     if not valid:
         log.warning("No valid leads — skipping upload")
@@ -378,7 +408,7 @@ def run_city(city_key: str, source: str, limit: int, dry_run: bool, cfg: Dict) -
         inserted, failed = upsert_leads(conn, valid, cfg["ingestion"].get("batch_size", 100))
         log_ingestion(conn, source, city_cfg["city"], inserted)
         conn.close()
-        log.info(f"✅ {city_key}: {inserted} inserted, {failed} failed")
+        log.info(f"✅ {city_key}: {inserted} quality leads uploaded to Supabase, {failed} failed")
         return {"city": city_key, "fetched": len(raw), "valid": len(valid), "inserted": inserted, "failed": failed}
     except Exception as e:
         log.error(f"DB error for {city_key}: {e}")
@@ -387,16 +417,19 @@ def run_city(city_key: str, source: str, limit: int, dry_run: bool, cfg: Dict) -
 
 def print_summary(results: List[Dict]):
     print("\n" + "="*60)
-    print("WEBBUILD PIPELINE SUMMARY")
+    print("WEBBUILD QUALITY PIPELINE SUMMARY (500MB Supabase Limit)")
+    print("="*60)
+    print("Only uploading: Target industries + MEDIUM/HIGH quality leads")
     print("="*60)
     for r in results:
         icon = "✅" if r.get("inserted",0) > 0 else "⚠️"
-        print(f"{icon} {r['city']:<12} fetched={r.get('fetched',0):>4}  valid={r.get('valid',0):>4}  "
-              f"inserted={r.get('inserted',0):>4}  failed={r.get('failed',0):>3}")
+        print(f"{icon} {r['city']:<12} fetched={r.get('fetched',0):>4}  quality={r.get('valid',0):>4}  "
+              f"uploaded={r.get('inserted',0):>4}  failed={r.get('failed',0):>3}")
     total_i = sum(r.get("inserted",0) for r in results)
     total_f = sum(r.get("failed",0) for r in results)
     total_r = sum(r.get("fetched",0) for r in results)
-    print(f"\nTOTAL  fetched={total_r}  inserted={total_i}  failed={total_f}")
+    total_q = sum(r.get("valid",0) for r in results)
+    print(f"\nTOTAL  fetched={total_r}  quality={total_q}  uploaded={total_i}  failed={total_f}")
     print("="*60)
 
 

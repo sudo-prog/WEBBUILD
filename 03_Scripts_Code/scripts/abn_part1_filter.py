@@ -7,7 +7,7 @@ ZIP_PATH = "/home/thinkpad/data/abn/public_split_1_10.zip"
 OUT_DIR = Path("/home/thinkpad/data/abn/processed")
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-KEEP_ENTITY_TYPES = {'PRV', 'IND', 'FPT', 'SMF', 'PTR', 'DTT', 'DIT', 'FUT', 'STR', 'OIE'}
+KEEP_ENTITY_TYPES = {'PRV', 'IND', 'FPT', 'PTR', 'OIE'}
 
 CAPITAL_POSTCODES = {
     'Sydney':    list(range(2000, 2235)) + list(range(2250, 2269)) + list(range(2550, 2760)),

@@ -97,10 +97,13 @@ def lookup_by_name(cur: sqlite3.Cursor, name: str, state: str | None = None, lim
 # ─── Duplicate check against Supabase ─────────────────────────────────────────
 def already_in_supabase(cur, business_name: str, abn: str | None = None) -> bool:
     try:
-        import psycopg
-        conn_str = "host=localhost port=6543 dbname=postgres user=supabase_service password=supabase_service_1777698346"
-        with psycopg.connect(conn_str) as pg:
-            with pg.cursor() as c:
+        import psycopg2
+        conn = psycopg2.connect(
+            host="localhost", port=6543, dbname="postgres",
+            user="supabase_service", password="supabase_service_1777698346"
+        )
+        with conn:
+            with conn.cursor() as c:
                 c.execute('''
                     SELECT 1 FROM leads
                     WHERE lower(business_name) = lower(%s)

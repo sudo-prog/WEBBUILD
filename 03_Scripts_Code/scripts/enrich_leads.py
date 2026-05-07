@@ -19,26 +19,6 @@ _fb  = _load_scraper("scrape_facebook")
 scrape_google_maps = _gm.scrape_google_maps
 scrape_facebook    = _fb.scrape_facebook
 
-import json, sys, argparse, importlib.util
-from datetime import datetime
-from typing import Dict
-from pathlib import Path
-
-# Load sibling scrapers without requiring a package
-_SCRIPTS_DIR = Path(__file__).parent
-
-def _load_scraper(module_name: str):
-    path = _SCRIPTS_DIR / f"{module_name}.py"
-    spec = importlib.util.spec_from_file_location(module_name, path)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-_gm  = _load_scraper("scrape_google_maps")
-_fb  = _load_scraper("scrape_facebook")
-
-scrape_google_maps = _gm.scrape_google_maps
-scrape_facebook    = _fb.scrape_facebook
 
 # ─── Yellow Pages real lookup ─────────────────────────────────────────────────
 _YP_LOOKUP = None  # dict: (name_lower, city_lower) -> record dict

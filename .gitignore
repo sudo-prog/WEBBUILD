@@ -11,7 +11,8 @@ __pycache__/
 .myconfig
 
 ### IDE & Editor ###
-.vscode/
+.vscode/*
+!/.vscode/mcp.json
 .idea/
 .project
 .workspace
@@ -58,7 +59,6 @@ secrets.yaml
 *.test
 *.development
 test_*
-test_*.py
 **/*test.py
 **/*spec.py
 
@@ -91,6 +91,7 @@ poetry/
 05_Final_Outputs/*.txt
 
 ### Miscellaneous ###
+!/.vscode/mcp.json
 *.7z
 *.bin
 *.bmp

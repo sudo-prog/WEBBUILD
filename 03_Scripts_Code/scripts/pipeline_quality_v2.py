@@ -44,10 +44,14 @@ def main():
 
     # Final summary
     print("\n=== RESULTS SUMMARY ===")
-    subprocess.run(["python3","-c",
-        f"import json; data=[json.loads(l) for l in open('{args.output}')]; "
-        "tot=len(data); prem=sum(1 for d in data if d['priority']=='PREMIUM'); high=sum(1 for d in data if d['priority']=='HIGH'); med=sum(1 for d in data if d['priority']=='MEDIUM'); disc=sum(1 for d in data if d['priority']=='DISCARD'); "
-        f\"print('Total: {{}}  PREMIUM: {{}}  HIGH: {{}}  MEDIUM: {{}}  DISCARD: {{}}'.format(tot, prem, high, med, disc))\"])
+    # Final summary using Python code
+    data = [json.loads(l) for l in open(args.output)]
+    tot = len(data)
+    prem = sum(1 for d in data if d.get('priority') == 'PREMIUM')
+    high = sum(1 for d in data if d.get('priority') == 'HIGH')
+    med = sum(1 for d in data if d.get('priority') == 'MEDIUM')
+    disc = sum(1 for d in data if d.get('priority') == 'DISCARD')
+    print(f'Total: {tot}  PREMIUM: {prem}  HIGH: {high}  MEDIUM: {med}  DISCARD: {disc}')
 
     print(f"\nFinal verified leads: {args.output}")
 

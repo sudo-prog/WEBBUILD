@@ -13,12 +13,7 @@ from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 from pathlib import Path
 
-try:
-    import psycopg2
-    from psycopg2.extras import execute_batch, Json
-except ImportError:
-    print("ERROR: psycopg2 not installed. Run: pip install psycopg2-binary")
-    sys.exit(1)
+from postgrest import SyncPostgrestClient
 
 PROJECT_ROOT = Path(__file__).parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -31,7 +26,7 @@ class Config:
     db_host: str = '127.0.0.1'
     db_port: int = 6543
     db_name: str = 'postgres'
-    db_user: str = 'supabase_service'
+    db_user: str = 'postgres'
     db_password: str = ''
     batch_size: int = 100
     dry_run: bool = False
@@ -47,7 +42,7 @@ class Config:
             db_host=db.get('host', '127.0.0.1'),
             db_port=db.get('port', 6543),
             db_name=db.get('database', 'postgres'),
-            db_user=db.get('user', 'supabase_service'),
+            db_user=db.get('user', 'postgres'),
             db_password=db.get('password', ''),
             batch_size=ing.get('batch_size', 100),
             dry_run=ing.get('dry_run', False),
@@ -60,7 +55,7 @@ class Config:
             db_host=os.getenv('PG_HOST', '127.0.0.1'),
             db_port=int(os.getenv('PG_PORT', '6543')),
             db_name=os.getenv('PG_DATABASE', 'postgres'),
-            db_user=os.getenv('PG_USER', 'supabase_service'),
+            db_user=os.getenv('PG_USER', 'postgres'),
             db_password=os.getenv('PG_PASSWORD', ''),
             batch_size=int(os.getenv('BATCH_SIZE', '100')),
             dry_run=os.getenv('DRY_RUN', 'false').lower() == 'true',
@@ -89,98 +84,34 @@ class Database:
     def __init__(self, config: Config, logger: logging.Logger):
         self.config = config
         self.logger = logger
-        self.conn = None
-        self.connect()
-
-    def connect(self):
-        if self.config.dry_run:
-            self.logger.info("[DRY-RUN] No DB connection")
-            return
-        dsn = f"host={self.config.db_host} port={self.config.db_port} dbname={self.config.db_name} user={self.config.db_user} password={self.config.db_password}"
-        self.conn = psycopg2.connect(dsn)
-        self.conn.autocommit = True
-        self.logger.info(f"Connected to PostgreSQL at {self.config.db_host}:{self.config.db_port}")
+        self.client = None
+        if not self.config.dry_run:
+            import os
+            supabase_url = os.getenv("SUPABASE_URL")
+            anon_key = os.getenv("SUPABASE_ANON_KEY")
+            if not supabase_url or not anon_key:
+                self.logger.warning('SUPABASE_URL or SUPABASE_ANON_KEY not set — DB ops will be skipped')
+            else:
+                self.client = SyncPostgrestClient(supabase_url, headers={"Authorization": f"Bearer {anon_key}"})
+                self.logger.info(f'Connected to Supabase at {supabase_url}')
+        else:
+            self.logger.info('[DRY-RUN] No DB connection')
 
     def insert_leads(self, leads: List[Dict], batch_id: str) -> Dict[str, int]:
         if self.config.dry_run:
             self.logger.info(f"[DRY-RUN] Would insert {len(leads)} leads")
             return {'inserted': len(leads), 'updated': 0, 'skipped': 0, 'failed': 0}
 
-        if not self.conn:
+        if not self.client:
             return {'inserted': 0, 'updated': 0, 'skipped': 0, 'failed': len(leads)}
 
         stats = {'inserted': 0, 'updated': 0, 'skipped': 0, 'failed': 0}
-        cur = self.conn.cursor()
-
-        # Upsert SQL
-        sql = """
-        INSERT INTO leads (
-            lead_id, source, ingestion_batch_id,
-            business_name, abn, category, subcategory, services,
-            phone, mobile, email, website,
-            country, state, city, suburb, postcode, address_full,
-            geo_lat, geo_lng,
-            years_in_business, employee_count,
-            rating, review_count,
-            lead_score, tier, is_active,
-            first_seen_at, last_verified_at,
-            created_at, updated_at
-        ) VALUES (
-            %(lead_id)s, %(source)s, %(ingestion_batch_id)s,
-            %(business_name)s, %(abn)s, %(category)s, %(subcategory)s, %(services)s,
-            %(phone)s, %(mobile)s, %(email)s, %(website)s,
-            %(country)s, %(state)s, %(city)s, %(suburb)s, %(postcode)s, %(address_full)s,
-            %(geo_lat)s, %(geo_lng)s,
-            %(years_in_business)s, %(employee_count)s,
-            %(rating)s, %(review_count)s,
-            %(lead_score)s, %(tier)s, %(is_active)s,
-            %(first_seen_at)s, %(last_verified_at)s,
-            %(created_at)s, %(updated_at)s
-        )
-        ON CONFLICT (lead_id) DO UPDATE SET
-            source = EXCLUDED.source,
-            business_name = EXCLUDED.business_name,
-            abn = EXCLUDED.abn,
-            category = EXCLUDED.category,
-            subcategory = EXCLUDED.subcategory,
-            services = EXCLUDED.services,
-            phone = EXCLUDED.phone,
-            mobile = EXCLUDED.mobile,
-            email = EXCLUDED.email,
-            website = EXCLUDED.website,
-            country = EXCLUDED.country,
-            state = EXCLUDED.state,
-            city = EXCLUDED.city,
-            suburb = EXCLUDED.suburb,
-            postcode = EXCLUDED.postcode,
-            address_full = EXCLUDED.address_full,
-            geo_lat = EXCLUDED.geo_lat,
-            geo_lng = EXCLUDED.geo_lng,
-            years_in_business = EXCLUDED.years_in_business,
-            employee_count = EXCLUDED.employee_count,
-            rating = EXCLUDED.rating,
-            review_count = EXCLUDED.review_count,
-            lead_score = EXCLUDED.lead_score,
-            tier = EXCLUDED.tier,
-            is_active = EXCLUDED.is_active,
-            last_verified_at = EXCLUDED.last_verified_at,
-            updated_at = now()
-        RETURNING (xmax = 0) as inserted;
-        """
-
         try:
-            # Use execute_batch for efficiency
-            cur.executemany(sql, leads)
-            rows_affected = cur.rowcount
-
-            # Check which were inserts vs updates (approximate)
-            stats['inserted'] = rows_affected  # conservative; will refine if needed
-            stats['updated'] = 0
-            self.logger.info(f"Inserted/updated {rows_affected} leads")
+            result = self.client.table('leads').upsert(leads, on_conflict='business_name,city').execute()
+            stats['inserted'] = len(result.data)
         except Exception as e:
-            self.logger.error(f"Batch insert failed: {e}")
+            self.logger.error(f'Failed to insert leads: {e}')
             stats['failed'] = len(leads)
-
         return stats
 
     def log_ingestion(self, log_entry: Dict) -> Optional[str]:
@@ -189,47 +120,21 @@ class Database:
             self.logger.info(f"[DRY-RUN] Would log ingestion: {log_entry['source_name']} id={log_id}")
             return log_id
 
-        cur = self.conn.cursor()
-        sql = """
-        INSERT INTO ingestion_log (
-            batch_id, source_name, city_target, state_target,
-            record_count, status, source_config
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s)
-        RETURNING id;
-        """
         try:
-            cur.execute(sql, (
-                log_entry['batch_id'],
-                log_entry['source_name'],
-                log_entry['city_target'],
-                log_entry['state_target'],
-                log_entry.get('record_count', 0),
-                log_entry.get('status', 'running'),
-                Json(log_entry.get('source_config', {}))
-            ))
-            log_id = str(cur.fetchone()[0])
+            result = self.client.table('ingestion_log').insert(log_entry).execute()
+            log_id = str(result.data[0]['id']) if result.data else str(uuid.uuid4())
             return log_id
         except Exception as e:
-            self.logger.error(f"Failed to create ingestion_log: {e}")
+            self.logger.error(f'Failed to create ingestion_log: {e}')
             return None
 
     def update_ingestion(self, log_id: str, updates: Dict):
         if self.config.dry_run:
             return
-        cur = self.conn.cursor()
-
-        set_parts = []
-        values = []
-        for key, val in updates.items():
-            set_parts.append(f"{key} = %s")
-            values.append(val)
-        values.append(log_id)
-
-        sql = f"UPDATE ingestion_log SET {', '.join(set_parts)} WHERE id = %s;"
         try:
-            cur.execute(sql, values)
+            self.client.table('ingestion_log').update(updates).eq('id', log_id).execute()
         except Exception as e:
-            self.logger.error(f"Failed to update ingestion_log: {e}")
+            self.logger.error(f'Failed to update ingestion_log: {e}')
 
 # ============================================
 # Lead validation
@@ -270,23 +175,6 @@ def validate_lead(raw: Dict, city_config: Dict, logger: logging.Logger) -> Optio
         logger.debug(f"Lead '{business_name}' has website '{website}' — rejecting")
         return None
 
-    # ============================================
-    # NEW: ABN cross-reference with Australian Business Register
-    # Zero-trust: ABN must be valid AND active; any error = REJECT
-    # ============================================
-    abn = raw.get('abn')
-    if abn:
-        is_verified, abn_details = verify_abn(business_name, state, abn)
-        if is_verified:
-            lead_score = min(100, lead_score + 15) if lead_score else 65
-            official_name = abn_details.get('entity_name', '')
-            if official_name and len(official_name) > len(business_name):
-                business_name = official_name
-        else:
-            logger.debug(f"Lead '{business_name}' ABN {abn} failed verification (reason: {abn_details.get('error','unknown')})")
-            return None
-
-
     phone = raw.get('phone', '').strip() if raw.get('phone') else None
     if phone:
         phone = phone.replace(' ', '')
@@ -306,6 +194,22 @@ def validate_lead(raw: Dict, city_config: Dict, logger: logging.Logger) -> Optio
         except (ValueError, TypeError):
             lead_score = 50
 
+    # ============================================
+    # ABN cross-reference with Australian Business Register
+    # Zero-trust: ABN must be valid AND active; any error = REJECT
+    # ============================================
+    abn = raw.get('abn')
+    if abn:
+        is_verified, abn_details = verify_abn(business_name, state, abn)
+        if is_verified:
+            lead_score = min(100, lead_score + 15) if lead_score else 65
+            official_name = abn_details.get('entity_name', '')
+            if official_name and len(official_name) > len(business_name):
+                business_name = official_name
+        else:
+            logger.debug(f"Lead '{business_name}' ABN {abn} failed verification (reason: {abn_details.get('error','unknown')})")
+            return None
+
     lat = raw.get('geo_lat')
     lng = raw.get('geo_lng')
     if lat and lng:
@@ -316,6 +220,13 @@ def validate_lead(raw: Dict, city_config: Dict, logger: logging.Logger) -> Optio
                 lat = lng = None
         except (ValueError, TypeError):
             lat = lng = None
+
+    # Ensure services is a string, not a list (psycopg2 cannot insert lists into text columns)
+    services = raw.get('services')
+    if isinstance(services, list):
+        services = ",".join(str(s) for s in services)
+    elif not isinstance(services, str):
+        services = None
 
     if errors:
         for err in errors:
@@ -331,7 +242,7 @@ def validate_lead(raw: Dict, city_config: Dict, logger: logging.Logger) -> Optio
         'abn': raw.get('abn'),
         'category': category,
         'subcategory': raw.get('subcategory'),
-        'services': raw.get('services'),
+        'services': services,
         'phone': phone,
         'mobile': raw.get('mobile'),
         'email': email,
@@ -362,6 +273,9 @@ def validate_lead(raw: Dict, city_config: Dict, logger: logging.Logger) -> Optio
 # ============================================
 def load_city_config(city_key: str) -> Dict[str, str]:
     config_path = PROJECT_ROOT / 'config' / 'settings.json'
+    # Fallback to root-level config if not found in scripts directory
+    if not config_path.exists():
+        config_path = Path(__file__).parent.parent / 'config' / 'settings.json'
     if config_path.exists():
         with open(config_path) as f:
             data = json.load(f)
@@ -388,7 +302,7 @@ class CityFetcher:
         self.city_config = load_city_config(city_key)
 
     def fetch_all(self, source: Optional[str] = None) -> List[Dict]:
-        sources = [source] if source else ['google_business', 'yellow_pages', 'manual', 'tradie_portal']
+        sources = [source] if source else ['google_business', 'yellow_pages', 'manual']
         all_leads = []
         for src in sources:
             try:
@@ -427,8 +341,16 @@ class CityFetcher:
 );
 out center tags;"""
         try:
+            # Overpass API is picky about Accept-Encoding — newer requests lib sends br,zstd which causes 406
             r = requests.post("https://overpass-api.de/api/interpreter",
-                            data={"data": overpass_query}, timeout=30)
+                            data={"data": overpass_query},
+                            headers={
+                                "Accept": "*/*",
+                                "Accept-Encoding": "gzip, deflate",
+                                "User-Agent": "curl/8.0",
+                                "Content-Type": "application/x-www-form-urlencoded",
+                            },
+                            timeout=30)
             if r.status_code == 200:
                 for el in r.json().get("elements", []):
                     tags = el.get("tags", {})
@@ -451,28 +373,65 @@ out center tags;"""
                         "address_full": tags.get("addr:full"),
                         "source": "google_maps_real", "abn": None
                     })
+            else:
+                self.logger.warning(f"OSM API returned {r.status_code}: {r.text[:200]}")
         except Exception as e:
             self.logger.error(f"OSM query failed: {e}")
         return results
+
     def _fetch_yellow_pages(self) -> List[Dict]:
-        """Real Yellow Pages AU scraper — Playwright (bypasses Cloudflare)."""
+        """Real Yellow Pages AU scraper — Playwright (bypasses Cloudflare).
+        Has a short timeout — if scraper unavailable, returns empty."""
         import subprocess, json
         city = self.city_key
         state = self.city_config.get("state", "NSW")
-        cmd = [
-            "/home/thinkpad/.hermes/hermes-agent/venv/bin/python",
-            "/home/thinkpad/Projects/supabase_australia/scripts/scrape_yp_playwright.py",
-            city, state
-        ]
+
+        # Check if the scraper script exists and playwright is available
+        scraper_path = PROJECT_ROOT / "scripts" / "scrape_yp_playwright.py"
+        if not scraper_path.exists():
+            self.logger.warning(f"YP scraper not found at {scraper_path}")
+            return []
+
+        # Try with system python first (more likely to have playwright)
+        python_candidates = [sys.executable, "/usr/bin/python3", "/usr/bin/python"]
+        for python_bin in python_candidates:
+            if not os.path.isfile(python_bin):
+                continue
+            # Quick check if playwright is installed
+            try:
+                import subprocess
+                r = subprocess.run(
+                    [python_bin, "-c", "import playwright; print('ok')"],
+                    capture_output=True, text=True, timeout=5
+                )
+                if r.returncode == 0:
+                    break
+            except Exception:
+                continue
+        else:
+            self.logger.warning("Playwright not available — skipping YP scraper")
+            return []
+
+        cmd = [python_bin, str(scraper_path), city, state]
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
             if result.returncode != 0:
-                self.logger.error(f"YP scraper failed: {result.stderr}")
+                self.logger.error(f"YP scraper failed: {result.stderr[:200]}")
+                return []
+            if not result.stdout.strip():
+                self.logger.warning(f"YP scraper returned empty output")
                 return []
             data = json.loads(result.stdout)
+        except json.JSONDecodeError as e:
+            self.logger.error(f"YP scraper output not valid JSON: {e}")
+            return []
+        except subprocess.TimeoutExpired:
+            self.logger.warning(f"YP scraper timed out (60s)")
+            return []
         except Exception as e:
             self.logger.error(f"YP scraper error: {e}")
             return []
+
         results = []
         for item in data:
             results.append({
@@ -490,20 +449,24 @@ out center tags;"""
                 "abn": None,
             })
         return results
+
     def _fetch_tradie_portal(self) -> List[Dict]:
         """Tradie portal data is often gated/synthetic — disabled."""
         return []
+
     def _fetch_manual(self) -> List[Dict]:
-        csv_path = PROJECT_ROOT / 'data' / 'inputs' / f'{self.city_key}_leads.csv'
-        if not csv_path.exists():
-            return []
-        leads = []
-        with open(csv_path, newline='', encoding='utf-8') as f:
-            for row in csv.DictReader(f):
-                row['source'] = 'manual'
-                leads.append(row)
-        self.logger.info(f"Loaded {len(leads)} leads from {csv_path}")
-        return leads
+        # Try both possible locations for input CSVs
+        for base in [PROJECT_ROOT, PROJECT_ROOT.parent]:
+            csv_path = base / 'data' / 'inputs' / f'{self.city_key}_leads.csv'
+            if csv_path.exists():
+                leads = []
+                with open(csv_path, newline='', encoding='utf-8') as f:
+                    for row in csv.DictReader(f):
+                        row['source'] = 'manual'
+                        leads.append(row)
+                self.logger.info(f"Loaded {len(leads)} leads from {csv_path}")
+                return leads
+        return []
 
 # ============================================
 # Orchestrator
@@ -619,7 +582,10 @@ Examples:
     logger = setup_logging(args.log_level)
     logger.info("Australian Leads Ingestion Pipeline (psycopg2) starting")
 
-    config_path = Path(args.config)
+    # Try config from scripts directory first, then root
+    config_path = PROJECT_ROOT / args.config
+    if not config_path.exists():
+        config_path = Path(__file__).parent.parent / args.config
     if config_path.exists():
         config = Config.from_file(str(config_path))
         logger.info(f"Loaded config from {config_path}")
@@ -628,7 +594,7 @@ Examples:
         logger.info("Loaded config from environment variables")
 
     config.dry_run = config.dry_run or args.dry_run
-    if not config.db_password:
+    if not config.db_password and not config.dry_run:
         logger.error("DB password not set (check config/settings.json or PG_PASSWORD env var)")
         sys.exit(1)
 

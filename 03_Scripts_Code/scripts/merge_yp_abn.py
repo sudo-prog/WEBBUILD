@@ -5,9 +5,17 @@ import json, re, sys
 from pathlib import Path
 from collections import defaultdict
 
-YP_DIR       = Path("/home/thinkpad/Projects/supabase_australia/raw_leads/yellow_pages")
+YP_DIR        = Path("/home/thinkpad/Projects/supabase_australia/raw_leads/yellow_pages")
 ABN_LEADS_DIR = Path("/home/thinkpad/data/abn/leads")
-OUTPUT_PATH  = Path("/home/thinkpad/Projects/supabase_australia/data/weekly_leads.json")
+OUTPUT_PATH   = Path("/home/thinkpad/Projects/supabase_australia/data/weekly_leads.json")
+
+# Check input paths exist before proceeding
+if not YP_DIR.exists():
+    print(f"[FATAL] YP_DIR does not exist: {YP_DIR}")
+    sys.exit(1)
+if not ABN_LEADS_DIR.exists():
+    print(f"[FATAL] ABN_LEADS_DIR does not exist: {ABN_LEADS_DIR}")
+    sys.exit(1)
 
 STOPWORDS = {'pty','ltd','limited','pl','co','&','and','the','service','services','solutions','group','holdings','enterprises','aust','trading','t/as','tradingas','prop','property','investments','management','tr','ft','trust','family','super','fund','partnership','partners'}
 

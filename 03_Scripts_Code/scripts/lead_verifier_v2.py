@@ -81,6 +81,11 @@ def layer2(enr: Dict) -> Dict:
         # No hard kill — continue to evaluate other signals (phone, FB, owner replies)
     else:
         if last_rev:
+            if isinstance(last_rev, str):
+                try:
+                    last_rev = datetime.fromisoformat(last_rev)
+                except ValueError:
+                    last_rev = None
             days = (datetime.now() - last_rev).days if isinstance(last_rev, datetime) else 999
             if   days <= 30: score += 15
             elif days <= 90: score += 10
@@ -95,6 +100,11 @@ def layer2(enr: Dict) -> Dict:
 
     fb_post = enr.get("facebook_last_post")
     if fb_post:
+        if isinstance(fb_post, str):
+            try:
+                fb_post = datetime.fromisoformat(fb_post)
+            except ValueError:
+                fb_post = None
         days = (datetime.now() - fb_post).days if isinstance(fb_post, datetime) else 999
         if   days <= 30: score += 8
         elif days <= 60: score += 5

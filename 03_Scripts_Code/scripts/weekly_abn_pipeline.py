@@ -33,7 +33,7 @@ TARGET_CITIES = [
 ]
 
 # Derived commands
-DOWNLOADER = [sys.executable, str(PROJECT_ROOT / "scripts" / "abn_bulk_download.py"), "--dry-run=False"]
+DOWNLOADER = [sys.executable, str(PROJECT_ROOT / "scripts" / "abn_bulk_download.py"), ""]
 EXTRACTOR_BASE = [sys.executable, str(PROJECT_ROOT / "scripts" / "abn_lead_extractor.py")]
 ENRICHER = [sys.executable, str(PROJECT_ROOT / "abn_enrichment.py")]  # existing phone/email enricher (if available)
 IMPORT_SCRIPT = [sys.executable, str(PROJECT_ROOT / "scripts" / "import_leads.py")]  # will create
@@ -94,6 +94,7 @@ def weekly_pipeline(dry_run: bool = False, send_telegram: bool = True) -> Dict:
         if r.returncode == 0 and out_json.exists():
             batch = json.loads(out_json.read_text())
             all_leads.extend(batch)
+            extract_stats[city]["count"] = len(batch)
             log.info(f"→ {len(batch):,} raw leads from {city}")
         else:
             summary["errors"].append(f"Extract failed for {city}")

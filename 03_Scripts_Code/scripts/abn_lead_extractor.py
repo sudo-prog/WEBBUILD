@@ -10,7 +10,7 @@ Filters the weekly ABN dump for high-intent B2B leads:
 
 Exports JSON in the qualified_leads schema used by the rest of the pipeline.
 """
-import os, re, json, csv, argparse, logging, time
+import os, re, json, csv, argparse, logging, time, uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Set
@@ -116,33 +116,35 @@ def extract_leads(
             # ── Trade detection ──────────────────────────────────────────────────────
             entity_name = row.get(col_map.get("entityname","EntityName"), "").strip()
             trading     = row.get(col_map.get("tradingnames","TradingNames"), "").strip()
-            if not _detect_category(entity_name, trading):
+            category    = _detect_category(entity_name, trading)
+            if not category:
                 continue
             matched_trade += 1
 
             # ── Build lead ────────────────────────────────────────────────────────────
-            category     = _detect_category(entity_name, trading)
             postcode     = row.get(col_map.get("postcode","Postcode"), "").strip() or None
             address      = row.get(col_map.get("address","Address"), row.get(col_map.get("addressline1",""), "")).strip() or None
 
+                        # Generate unique lead_id
+            lead_id = f"{state_code.lower()[:2]}-{re.sub(r'[^a-z0-9]', '-', entity_name.lower())[:40]}-{str(uuid.uuid4())[:8]}"
             lead = {
-                "business_name":  entity_name,
-                "category":       category,
-                "phone":          None,
-                "email":          None,
-                "website":        None,
-                "city":           output_city.title(),
-                "state":          state_code.upper(),
-                "suburb":         None,
-                "postcode":       postcode,
-                "address_full":   address,
-                "source":         f"abn_bulk_{datetime.now(timezone.utc):%Y-%m-%d}",
-                "abn":            row.get(col_map.get("abn","ABN"), "").strip(),
-                "abn_status":     "active",
-                "lead_score":     None,
-                "needs_review":   False,
-                "enriched_at":    datetime.now(timezone.utc).isoformat(),
-            }
+                            "lead_id": lead_id,                "business_name":  entity_name,
+                            "category":       category,
+                            "phone":          None,
+                            "email":          None,
+                            "website":        None,
+                            "city":           output_city.title(),
+                            "state":          state_code.upper(),
+                            "suburb":         None,
+                            "postcode":       postcode,
+                            "address_full":   address,
+                            "source":         f"abn_bulk_{datetime.now(timezone.utc):%Y-%m-%d}",
+                            "abn":            row.get(col_map.get("abn","ABN"), "").strip(),
+                            "abn_status":     "active",
+                            "lead_score":     None,
+                            "needs_review":   False,
+                            "enriched_at":    datetime.now(timezone.utc).isoformat(),
+                        }
             leads.append(lead)
 
             if len(leads) >= max_results:

@@ -12,9 +12,10 @@ pipeline_path.replace(backup)
 print(f"Backup created: {backup}")
 
 # Replacement 1: google_business -> OSM
-google_new = """    def _fetch_google_business(self) -> List[Dict]:
-        """Fetch businesses from OpenStreetMap/Overpass (Google Maps equivalent).
-        Filters: businesses with contact but NO website."""
+google_new = '''
+    def _fetch_google_business(self) -> List[Dict]:
+        # Fetch businesses from OpenStreetMap/Overpass (Google Maps equivalent).
+        # Filters: businesses with contact but NO website.
         import requests
         results = []
         city = self.city_key
@@ -55,11 +56,10 @@ google_new = """    def _fetch_google_business(self) -> List[Dict]:
                     })
         except Exception as e:
             self.logger.error(f"OSM query failed: {e}")
-        return results"""
+        return results'''
 
 orig = re.sub(
-    r'    def _fetch_google_business\(self\) -> List\[Dict\]:.*?(?=
-    def _fetch_yellow)',
+    r'    def _fetch_google_business\(self\) -> List\[Dict\]:.*?def _fetch_yellow',
     google_new,
     orig,
     flags=re.DOTALL
@@ -67,8 +67,9 @@ orig = re.sub(
 print("✓ Patched _fetch_google_business")
 
 # Replacement 2: yellow_pages
-yellow_new = """    def _fetch_yellow_pages(self) -> List[Dict]:
-        """Real Yellow Pages — filters email present AND no website."""
+yellow_new = '''
+    def _fetch_yellow_pages(self) -> List[Dict]:
+        # Real Yellow Pages — filters email present AND no website.
         import requests
         results = []
         city = self.city_key
@@ -103,11 +104,10 @@ yellow_new = """    def _fetch_yellow_pages(self) -> List[Dict]:
                         })
             except Exception as e:
                 self.logger.debug(f"YP {category} error: {e}")
-        return results"""
+        return results'''
 
 orig = re.sub(
-    r'    def _fetch_yellow_pages\(self\) -> List\[Dict\]:.*?(?=
-    def _fetch_tradie)',
+    r'    def _fetch_yellow_pages\(self\) -> List\[Dict\]:.*?def _fetch_tradie',
     yellow_new,
     orig,
     flags=re.DOTALL
@@ -115,13 +115,13 @@ orig = re.sub(
 print("✓ Patched _fetch_yellow_pages")
 
 # Replacement 3: tradie_portal disabled
-tradie_new = """    def _fetch_tradie_portal(self) -> List[Dict]:
-        """Tradie portal data often synthetic — disabled pending verification."""
-        return []"""
+tradie_new = '''
+    def _fetch_tradie_portal(self) -> List[Dict]:
+        # Tradie portal data often synthetic — disabled pending verification.
+        return []'''
 
 orig = re.sub(
-    r'    def _fetch_tradie_portal\(self\) -> List\[Dict\]:.*?(?=
-    def _fetch_manual)',
+    r'    def _fetch_tradie_portal\(self\) -> List\[Dict\]:.*?def _fetch_manual',
     tradie_new,
     orig,
     flags=re.DOTALL

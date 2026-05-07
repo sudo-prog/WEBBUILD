@@ -4,8 +4,8 @@ from pathlib import Path
 from datetime import datetime
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 
-CITIES = ["Brisbane", "Sydney", "Gold Coast", "Melbourne", "Darwin", "Perth"]
-STATES = {"Brisbane":"QLD", "Sydney":"NSW", "Gold Coast":"QLD", "Melbourne":"VIC", "Darwin":"NT", "Perth":"WA"}
+CITIES = ["Brisbane", "Sydney", "Gold Coast", "Melbourne", "Darwin", "Perth", "Adelaide", "Canberra", "Hobart"]
+STATES = {"Brisbane":"QLD", "Sydney":"NSW", "Gold Coast":"QLD", "Melbourne":"VIC", "Darwin":"NT", "Perth":"WA", "Adelaide":"SA", "Canberra":"ACT", "Hobart":"TAS"}
 
 CATEGORIES = [
     "plumber","gas fitter","plumbing","hot water","drainage","septic","roof plumber",
@@ -22,7 +22,7 @@ CATEGORIES = [
     "mechanic","tradesperson","trades assistant","handyman","maintenance trades"
 ]
 
-OUT_DIR = Path("/home/thinkpad/Projects/supabase_australia/raw_leads/yellow_pages_batch")
+OUT_DIR = Path("/home/thinkpad/Projects/active/WEBBUILD/supabase_australia/raw_leads/yellow_pages_batch")
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 LISTING_SEL = 'div.v-card'
@@ -33,6 +33,60 @@ ADDR_LOC     = 'div.locality'
 WEBSITE_SEL  = 'a[href^="http"]'
 EXCLUDED_DOMAINS = ['yellowpages.com.au','yellow.com.au','thryv.com.au','directoryselect.com']
 SKIP_PATTERNS    = ['privacy','terms','login','account','my.yellow','facebook','twitter']
+
+# Trade keyword lists for relevance cross-check
+TRADE_RELEVANCE = {
+    "plumber":    "plumb|drain|pipe|leak|hot water|gas fit|septic|sewer|roof plumb",
+    "gas fitter": "gas fit|gas line|gas plumb|gas appliance",
+    "plumbing":   "plumb|drain|pipe|leak|hot water|gas fit|septic|sewer",
+    "hot water":  "hot water|water heater|instant gas|solar hot",
+    "drainage":   "drain|sewer|stormwater|pipe|drainage",
+    "septic":     "septic|sewer|waste|wastewater",
+    "roof plumber":"roof|gutter|downpipe|box gutter|metal roof|roofing",
+    "electrician":"electri|spark|wiring|switchboard|lighting|solar|power",
+    "electrical contractor":"electri|spark|wiring|switchboard",
+    "solar electrician":"solar|pv|photovoltaic|battery|inverter",
+    "auto electrician":"auto electri|car electri|vehicle",
+    "industrial electrician":"industrial|factory|plant|motor|control",
+    "residential electrician":"residential|home|house|domestic",
+    "commercial electrician":"commercial|office|shop|retail|warehouse",
+    "builder":    "builder|build|construct|renovat|home builder|project home|extend",
+    "construction manager":"construct|project manager|site|build",
+    "site manager":"site|construct|building|project",
+    "project manager":"project manager|construct|building",
+    "construction supervisor":"supervisor|site|construct|build",
+    "site supervisor":"site|supervisor|construct",
+    "foreman":    "foreman|supervisor|site|build",
+    "building supervisor":"building|supervisor|construct|site",
+    "boilermaker":"boiler|welding|fabrication|steel|fabricat",
+    "welder":     "weld|fabricat|steel|aluminium|stainless",
+    "metal fabricator":"fabricat|metal|steel|aluminium|weld",
+    "structural steel":"steel|structure|beam|column|fabricat",
+    "welding contractor":"weld|fabricat|steel|pipe",
+    "air conditioning":"air con|aircondit|hvac|refrig|duct|split system|cooling|heating",
+    "refrigeration":"refrig|freezer|cool room|cold|hvac",
+    "hvac":       "hvac|air con|ventilation|heating|cooling|duct",
+    "refrigeration mechanic":"refrig|hvac|air con|cool room",
+    "heating and cooling":"heating|cooling|air con|hvac|duct",
+    "ducting":    "duct|vent|air con|heating|cooling|hvac",
+    "mechanical services":"mechanical|hvac|vent|duct|air con",
+    "concreter":  "concrete|concret|slab|driveway|footing|path",
+    "concrete contractor":"concrete|slab|driveway|footing|path|paving",
+    "concreting": "concrete|slab|driveway|footing|path|stencil",
+    "flooring":   "floor|timber|laminate|carpet|vinyl|polished|tile",
+    "floor sander":"floor sand|timber floor|polish floor|floor refin",
+    "epoxy flooring":"epoxy|resin|floor coating|industrial floor|garage floor",
+    "polished concrete":"polished concrete|grind|concrete floor|seal",
+    "tiling":     "tile|tiling|floor tile|wall tile|bathroom tile|kitchen tile",
+    "carpenter":  "carpent|join|frame|truss|roof frame|timber|door|window|kitchen",
+    "joiner":     "join|cabinet|cupboard|drawer|bench|kitchen|wardrobe",
+    "cabinet maker":"cabinet|joinery|kitchen|bench|cupboard|wardrobe|vanity",
+    "mechanic":   "mechanic|engine|service|repair|brake|clutch|tyre|exhaust|suspension",
+    "tradesperson":"trade|tradesman|qualified|licens|certif",
+    "trades assistant":"trade|assist|labour|general|hand",
+    "handyman":   "handy|maintenance|repair|fix|home improve|reno",
+    "maintenance trades":"maintenance|repair|fix|service|handy",
+}
 
 def has_external_website(card):
     try:
@@ -59,6 +113,9 @@ def scrape_category(page, city, state, category, max_pages: int = 2):
                     name_el = card.query_selector(NAME_SEL)
                     name = name_el.inner_text().strip() if name_el else ""
                     if not name: continue
+                    name_lower = name.lower()
+                    if not any(kw in name_lower for kw in CATEGORIES):
+                        continue
                     phone_el = card.query_selector(PHONE_SEL)
                     phone = phone_el.inner_text().strip() if phone_el else ""
                     street_el = card.query_selector(ADDR_STREET)
@@ -68,9 +125,26 @@ def scrape_category(page, city, state, category, max_pages: int = 2):
                     if street_el and loc_el:
                         address = f"{street_el.inner_text().strip()}, {loc_el.inner_text().strip()}"
                         suburb  = loc_el.inner_text().strip()
-                    listing_type = "featured" if card.query_selector(".featured-label") else "basic"
+                    # ── NEW: Trade relevance cross-check ──────────────────────────
+                    relevance_pattern = TRADE_RELEVANCE.get(category, "")
                     desc_el = card.query_selector(".listing-description")
                     description = desc_el.inner_text().strip() if desc_el else ""
+                    if relevance_pattern:
+                        check_text = (name + " " + description).lower()
+                        if not re.search(relevance_pattern, check_text):
+                            print(f"  SKIP (irrelevant): {name} — category={category} no keyword match")
+                            continue
+                    # ── NEW: State address validation ──────────────────────────────
+                    if loc_el:
+                        loc_raw = loc_el.inner_text().strip()
+                        expected_state_abbr = STATES.get(city, state)
+                        state_in_loc = re.search(r'\b(' + '|'.join(STATES.values()) + r')\b', loc_raw)
+                        if state_in_loc:
+                            parsed_state = state_in_loc.group(1)
+                            if parsed_state != expected_state_abbr:
+                                print(f"  SKIP (wrong state): {name} — expected {expected_state_abbr}, got {parsed_state} in '{loc_raw}'")
+                                continue
+                    listing_type = "featured" if card.query_selector(".featured-label") else "basic"
                     has_web = has_external_website(card)
                     results.append({
                         "business_name":    name,
