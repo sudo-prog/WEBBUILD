@@ -201,3 +201,30 @@ Weekly output:        /home/thinkpad/Projects/supabase_australia/data/weekly_lea
 Supabase port:        6543 (localhost)
 Pipeline venv:        /home/thinkpad/.hermes/hermes-agent/venv/bin/python
 ```
+---
+
+## 2026-05-07 — Unified lead_id Generation Fix (CRITICAL)
+
+### Root Cause
+Different scripts generated conflicting `lead_id` values for the same business:
+- `pipeline_fixed.py`: `nsw-j---d-plumbing-services-<uuid>` (strips `&` via `re.sub`)
+- `ingestion_pipeline.py`: `nsw-j-&-d-plumbing-services-<uuid>` (keeps `&` via `.replace`)
+- `import_leads.py` / `abn_enrichment.py`: `NULL` (no lead_id set)
+
+This caused:
+1. Duplicate rows for same `(business_name, city)` → `UniqueViolation` on `unique_business_name_city`
+2. Enrichment runs inserting new rows instead of updating existing ones
+3. Pipeline crashes after successful ABN verification
+
+### Fix Applied
+1. **SQL migration** (`fix_duplicate_lead_ids.sql`): deduplicated existing rows, backfilled NULL lead_ids, added UNIQUE(lead_id)
+2. **Shared utility** (`scripts/lead_id_utils.py`): single canonical `make_lead_id()` using `uuid5(DNS_NAMESPACE, "state:name")` for deterministic suffixes
+3. **Patched scripts**:
+   - `ingestion_pipeline.py`: replaced ad-hoc generation with `patch_validate_lead_id()`
+   - `pipeline_fixed.py`: updated to use `lead_id_utils`
+   - `abn_enrichment.py`: fixed missing lead_id in UPSERT + pre-fetch existing IDs
+4. **Backfill** (`backfill_lead_ids.py`): exact Python uuid5 logic to sync all existing IDs
+
+### Commits
+- `8cec186` — unified lead_id generation using uuid5 + SQL migration + ingestion_pipeline patch
+- `e43473b` — lead_id/ingestion_batch_id fix in abn_enrichment.py + shell=True fix
