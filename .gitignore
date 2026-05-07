@@ -179,3 +179,10 @@ poetry/
 *.yang
 *.yml
 *.zip
+### Data Files — tracked externally via DB backup ###
+data/
+raw_leads/
+abn_extracts/
+extracted_leads.csv
+03_Scripts_Code/scripts/raw_leads/
+scripts/
