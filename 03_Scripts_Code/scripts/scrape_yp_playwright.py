@@ -134,7 +134,7 @@ async def scrape_yellow_pages(city: str, state: str, max_pages: int = 3) -> List
     all_leads: List[Dict] = []
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
+        browser = await p.chromium.launch(headless=True, args=['--no-sandbox'])
         context = await browser.new_context(user_agent=HEADERS["User-Agent"])
         page = await context.new_page()
 
@@ -162,7 +162,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     leads = scrape_yellow_pages_sync(args.city, args.state, max_pages=args.pages)
-    out = Path(f"/home/thinkpad/Projects/supabase_australia/raw_leads/yp_{args.city.lower()}_{int(time.time())}.json")
+    out = Path(f"/home/thinkpad/Projects/active/WEBBUILD/supabase_australia/01_Raw_Data/raw_leads/yellow_pages/yp_{args.city.lower()}_{int(time.time())}.json")
     out.parent.mkdir(exist_ok=True)
     out.write_text(json.dumps(leads, indent=2))
     print(f"✓ {len(leads)} leads → {out}")

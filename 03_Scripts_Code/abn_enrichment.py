@@ -25,6 +25,7 @@ import psycopg2
 from psycopg2.extras import execute_batch
 
 sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent / "scripts"))
 
 # Import fixed validator
 try:
@@ -35,6 +36,8 @@ except ImportError:
     except ImportError:
         def verify_abn(name, state, abn=None, phone_check=False):
             return False, {"error": "abn_validator not found"}
+
+from lead_id_utils import make_lead_id
 
 # ── Supabase connection ────────────────────────────────────────────────────────
 # Use local Docker container configuration
@@ -255,10 +258,7 @@ def upsert_leads(leads: List[Dict], dry_run: bool = False) -> int:
         if key in existing:
             lead_id = existing[key]
         else:
-            state = l["state"]
-            normalized_name = re.sub(r"[^a-z0-9]", "-", name.lower())
-            suffix = hashlib.md5(f"{state.lower()}-{normalized_name}-{city}".encode()).hexdigest()[:12]
-            lead_id = f"{state.lower()}-{normalized_name[:40]}-{suffix}"
+            lead_id = make_lead_id(l["state"], name)
         rows.append((
             lead_id, l["source"], str(uuid.uuid4()),
             name, l["category"], l["phone"], l["email"], l["website"],

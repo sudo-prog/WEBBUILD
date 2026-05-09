@@ -22,6 +22,8 @@ except ImportError:
 
 PROJECT_ROOT = Path(__file__).parent
 sys.path.insert(0, str(PROJECT_ROOT))
+# lead_id_utils lives in scripts/ subdirectory
+sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
 
 # ============================================
 # Configuration
