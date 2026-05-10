@@ -142,6 +142,7 @@ Leads are scored across 5 layers:
 
 ### Authentication Failed for User "postgres"
 **Cause**: Config file uses wrong user/password.
+
 **Fix**: Update `config/settings.json` and `03_Scripts_Code/config/settings.json` with:
 ```json
 {
@@ -154,6 +155,7 @@ Leads are scored across 5 layers:
 
 ### Pipeline Fails with Duplicate Key Violation
 **Cause**: Inconsistent lead_id values across scripts.
+
 **Fix**: Run lead_id backfill:
 ```bash
 cd /home/thinkpad/Projects/active/WEBBUILD/supabase_australia
@@ -162,6 +164,7 @@ export PG_HOST="localhost" && export PG_PORT="6543" && export PG_DATABASE="postg
 
 ### Web Server Won't Start
 **Cause**: Port already in use or permission issues.
+
 **Fix**: Check if another instance is running and kill it, then restart:
 ```bash
 fuser -k 8000/tcp
