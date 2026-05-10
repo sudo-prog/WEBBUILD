@@ -44,8 +44,55 @@ from lead_id_utils import make_lead_id
 SUPABASE_URL  = "localhost"
 SUPABASE_PORT = 6543
 SUPABASE_DB   = "postgres"
-SUPABASE_USER = "postgres"
-SUPABASE_PASS = "supabase_service_1777905407"  # Hardcoded for local Docker
+SUPABASE_USER = "supabase_service"
+SUPABASE_PASS = None  # Load from env or config
+
+# Load password from environment or configuration file
+def _load_password() -> Optional[str]:
+    # Try environment variable first
+    pw = os.getenv("SUPABASE_PASSWORD")
+    if pw:
+        logging.getLogger("abn_enrichment").info(f"Loaded password from environment")
+        return pw
+    # Then try config files
+    for idx, (path, key) in enumerate([
+        (Path.home() / ".config/hermes/supabase-credentials.json", "postgres.password"),
+        (Path.home() / ".config/hermes/telegram-credentials.json", "supabase_password"),
+        (Path(__file__).parent.parent / "config/settings.json", "postgres.password"),
+    ]):
+        if path.exists():
+            logging.getLogger("abn_enrichment").info(f"Trying path {idx}: {path}")
+            try:
+                data = json.loads(path.read_text())
+                logging.getLogger("abn_enrichment").info(f"Loaded JSON from {path}")
+                # Support nested keys like "postgres.password"
+                parts = key.split(".")
+                for part in parts:
+                    data = data.get(part)
+                    if data is None:
+                        break
+                if data:
+                    logging.getLogger("abn_enrichment").info(f"Found password in {path} with key {key}")
+                    return data
+                else:
+                    logging.getLogger("abn_enrichment").info(f"Password not found in {path} with key {key}")
+            except Exception as e:
+                logging.getLogger("abn_enrichment").info(f"Error reading {path}: {e}")
+        else:
+            logging.getLogger("abn_enrichment").info(f"Path not found: {path}")
+    logging.getLogger("abn_enrichment").info(f"No password source found")
+    return None
+
+# Load password if not already set
+if SUPABASE_PASS is None:
+    loaded = _load_password()
+    if loaded:
+        SUPABASE_PASS = loaded
+    else:
+        logging.getLogger("abn_enrichment").error(
+            "Could not load Supabase password. Please set SUPABASE_PASSWORD or create config/settings.json."
+        )
+        sys.exit(1)
 
 # Only attempt to load from env/config if we don't already have a password
 def _load_password() -> Optional[str]:
@@ -65,12 +112,6 @@ def _load_password() -> Optional[str]:
             except Exception:
                 pass
     return None
-
-# Only call _load_password() if SUPABASE_PASS is not already set
-if not SUPABASE_PASS:
-    loaded = _load_password()
-    if loaded:
-        SUPABASE_PASS = loaded
 
 # ── Database connection ────────────────────────────────────────────────────────
 def connect_db():

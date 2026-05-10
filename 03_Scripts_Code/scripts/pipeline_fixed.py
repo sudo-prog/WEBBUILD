@@ -69,6 +69,7 @@ CATEGORY_MAP = {
 KEYWORD_TO_CATEGORY = {kw: cat for cat, kws in CATEGORY_MAP.items() for kw in kws}
 
 # ── Config loader ─────────────────────────────────────────────────────────────
+# ── Config loader ─────────────────────────────────────────────────────────────
 def load_config() -> Dict:
     # Use absolute path to ensure we find the config relative to script location
     script_dir = Path(__file__).resolve().parent
@@ -76,6 +77,18 @@ def load_config() -> Dict:
     cfg_path = PROJECT_ROOT / "config" / "settings.json"
     if cfg_path.exists():
         cfg = json.loads(cfg_path.read_text())
+        # Substitute environment variables in config values (e.g., ${VAR} patterns)
+        def substitute_vars(obj):
+            if isinstance(obj, dict):
+                return {k: substitute_vars(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [substitute_vars(v) for v in obj]
+            elif isinstance(obj, str) and obj.startswith('${') and obj.endswith('}'):
+                var_name = obj[2:-1]
+                return os.getenv(var_name, '')
+            else:
+                return obj
+        cfg = substitute_vars(cfg)
         log.info(f"Config loaded from {cfg_path}: {cfg}")
         return cfg
     return {

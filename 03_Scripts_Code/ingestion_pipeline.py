@@ -43,6 +43,18 @@ class Config:
     def from_file(cls, path: str = 'config/settings.json') -> 'Config':
         with open(path) as f:
             data = json.load(f)
+        # Substitute environment variables in config values (e.g., ${VAR} patterns)
+        def substitute_vars(obj):
+            if isinstance(obj, dict):
+                return {k: substitute_vars(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [substitute_vars(v) for v in obj]
+            elif isinstance(obj, str) and obj.startswith('${') and obj.endswith('}'):
+                var_name = obj[2:-1]
+                return os.getenv(var_name, '')
+            else:
+                return obj
+        data = substitute_vars(data)
         db = data.get('postgres', {})
         ing = data.get('ingestion', {})
         return cls(
@@ -55,6 +67,8 @@ class Config:
             dry_run=ing.get('dry_run', False),
             log_level=ing.get('log_level', 'INFO')
         )
+
+
 
     @classmethod
     def from_env(cls) -> 'Config':
