@@ -242,3 +242,50 @@ Weekly output:        /home/thinkpad/Projects/active/WEBBUILD/supabase_australia
 Supabase port:        6543 (localhost)
 Pipeline venv:        /home/thinkpad/.hermes/hermes-agent/venv/bin/python
 ```
+
+## CONTACT ENRICHMENT PIPELINE
+
+### Scripts
+- **enrich_contacts_free.py** - Core enrichment using free sources (ABN Lookup, DuckDuckGo, White Pages, True Local)
+- **run_enrichment_batch.py** - Orchestrates enrichment by city and upserts to Supabase
+- **test_enrichment.py** - Verifies sources are reachable
+
+### Key Features
+- Per-business targeted lookups (no bulk scraping)
+- Free sources only (no paid APIs)
+- Polite delays (2.5s between requests)
+- Resume-safe (writes each lead immediately)
+- Website detection (`has_website` flag)
+- Email extraction from website if available
+
+### Usage
+```bash
+# Test sources are reachable
+python scripts/test_enrichment.py
+
+# Dry run (preview queries)
+python scripts/run_enrichment_batch.py --city sydney --limit 10 --dry-run
+
+# Full enrichment (200 leads)
+python scripts/run_enrichment_batch.py --city sydney --limit 200
+
+# All cities (resumable)
+python scripts/run_enrichment_batch.py --all --limit 200 --resume
+```
+
+### Configuration
+- Input: ABN leads in JSONL format
+- Output: Enriched JSONL in `~/data/abn/enriched/`
+- Supabase connection via environment variables or config/settings.json
+- Default delay: 2.5s (adjustable with `--delay`)
+
+### Important Notes
+- Businesses with websites are more likely to have email addresses
+- Email capture rate from free sources is limited
+- Always use `--resume` for large batches to allow interruption recovery
+
+### Quick Reference
+- Scripts location: `~/scripts/`
+- Requirements: `pip install requests psycopg2-binary beautifulsoup4`
+- Enriched output: `~/data/abn/enriched/`
+- Pipeline venv: `/home/thinkpad/.hermes/hermes-agent/venv/bin/python`
