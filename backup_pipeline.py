@@ -68,11 +68,9 @@ CATEGORY_MAP = {
 }
 KEYWORD_TO_CATEGORY = {kw: cat for cat, kws in CATEGORY_MAP.items() for kw in kws}
 
+
 # ── Config loader ─────────────────────────────────────────────────────────────
 def load_config() -> Dict:
-    # Use absolute path to ensure we find the config relative to script location
-    script_dir = Path(__file__).resolve().parent
-    PROJECT_ROOT = script_dir.parent
     cfg_path = PROJECT_ROOT / "config" / "settings.json"
     if cfg_path.exists():
         cfg = json.loads(cfg_path.read_text())
@@ -337,7 +335,7 @@ def upsert_leads(conn, leads: List[Dict], batch_size: int = 100) -> Tuple[int, i
     return inserted, failed
 
 
-def log_ingestion(conn, source: str, city: str, count: int, status: str = "completed"):
+def log_ingestion(conn, source: str, city: str, count: int, status: str = "success"):
     try:
         with conn.cursor() as cur:
             cur.execute("""
@@ -420,8 +418,8 @@ def main():
         p.error("Specify --city <name> or --all")
 
     cfg = load_config()
-    # Note: args.config is ignored; load_config() already loads the correct config
-    # from the script's config directory. The --config option is not supported.
+    if args.config and Path(args.config).exists():
+        cfg = json.loads(Path(args.config).read_text())
 
     if not cfg["postgres"].get("password") and not args.dry_run:
         log.error("No DB password set. Use --dry-run or set PG_PASSWORD env var.")
