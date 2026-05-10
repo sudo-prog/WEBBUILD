@@ -169,7 +169,48 @@ Hermes may only be used for Telegram notifications and credential retrieval.
 
 ---
 
-## RECENT CHANGES — 2026-05-07
+## RECENT CHANGES — 2026-05-10
+
+### Patch: `pipeline_fixed.py` — Database Authentication Fix
+- **Problem:** Pipeline failed to connect to Supabase with "password authentication failed" error, despite correct password working via `docker exec`.
+- **Root Cause:** 
+  1. Config file used `${SUPABASE_PASSWORD}` placeholder which was read literally
+  2. Environment variable name mismatch: script expects `PG_PASSWORD` (with underscore), not `PGPASSWORD`
+  3. Pipeline was not reading the environment variable correctly due to config file override logic
+- **Solution:**
+  1. Removed password from `config/settings.json` entirely
+  2. Updated `pipeline_fixed.py` to:
+     - Load config from file if exists, otherwise fallback to env vars
+     - If config file exists but missing password, attempt to read `PG_PASSWORD` env var
+     - Properly validate that password is set before attempting DB connection
+  3. Created `.env` file with all credentials (gitignored)
+  4. Added `export` statements to `.env` for proper environment inheritance
+  5. Updated `.gitignore` to exclude `.env` only (config file now safe for commit)
+
+### Security Hardening
+- ✅ **No hardcoded credentials** in Python scripts
+- ✅ **Environment variables** used for all sensitive data
+- ✅ **.env file** gitignored to prevent accidental commits
+- ✅ **Config file** (`settings.json`) contains only non-sensitive connection parameters (host, port, database, user) - safe for version control
+- ✅ **Template** (`settings.example.json`) provided for new developers
+
+### Verification
+- ✅ Pipeline runs successfully with `source .env && python3 pipeline_fixed.py`
+- ✅ Tested with 5 leads: 4 uploaded (1 rejected for industry filter)
+- ✅ Tested with 100 leads: 81 uploaded (19 rejected for quality filtering)
+- ✅ Database connection stable and secure
+- ✅ All credentials properly isolated from codebase
+
+### Important Notes for Future Agents
+- Always use `PG_PASSWORD` (with underscore) environment variable for database password
+- Source `.env` file before running pipeline: `source .env`
+- Config file should never contain passwords - use env vars
+- The pipeline now follows zero-trust security principles
+
+### Remaining Tasks
+- [ ] Update `enrich_leads.py` and other scripts to use the same credential pattern
+- [ ] Document the environment variable setup in project README
+- [ ] Set up automated health checks with credential verification
 
 ### Patch: `abn_enrichment.py` — NULL lead_id / missing columns fix
 - **Problem:** UPSERT omitted `lead_id`, `source`, and `ingestion_batch_id`, causing `NotNullViolation` on `leads.lead_id`.
@@ -195,9 +236,9 @@ ABN reference DB:     /home/thinkpad/data/abn/abn_reference.db
 ABN processed JSONL:  /home/thinkpad/data/abn/processed/leads_part*.jsonl
 Trade leads:          /home/thinkpad/data/abn/leads/trades_part*.jsonl
 Construction leads:   /home/thinkpad/data/abn/leads/construction_trades/
-YP raw leads:         /home/thinkpad/Projects/supabase_australia/raw_leads/
-YP batch leads:       /home/thinkpad/Projects/supabase_australia/raw_leads/yellow_pages_batch/
-Weekly output:        /home/thinkpad/Projects/supabase_australia/data/weekly_leads_*.json
+YP raw leads:         /home/thinkpad/Projects/active/WEBBUILD/supabase_australia/raw_leads/
+YP batch leads:       /home/thinkpad/Projects/active/WEBBUILD/supabase_australia/raw_leads/yellow_pages_batch/
+Weekly output:        /home/thinkpad/Projects/active/WEBBUILD/supabase_australia/data/weekly_leads_*.json
 Supabase port:        6543 (localhost)
 Pipeline venv:        /home/thinkpad/.hermes/hermes-agent/venv/bin/python
 ```

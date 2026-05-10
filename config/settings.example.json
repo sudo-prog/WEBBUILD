@@ -1,0 +1,12 @@
+{
+  "postgres": {
+    "host": "localhost",
+    "port": 6543,
+    "database": "postgres",
+    "user": "supabase_service",
+    "password": "${SUPABASE_PASSWORD}"
+  },
+  "ingestion": {
+    "batch_size": 100
+  }
+}

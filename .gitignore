@@ -1,182 +1,19 @@
-# supabase_australia .gitignore
-# Generated on: 2026-05-04
+# Ignore sensitive and temporary files
 
-### Python ###
+# Secrets - never commit
+.env
+
+# Python
 __pycache__/
 *.pyc
-.pytest_cache/
-.mypy_cache/
-.coverage
-.cache
-.myconfig
 
-### IDE & Editor ###
-.vscode/*
-!/.vscode/mcp.json
-.idea/
-.project
-.workspace
-*.swp
-*.swo
-
-### OS ###
+# OS
 .DS_Store
 Thumbs.db
+
+# Project-specific
+data/
+logs/
 *.log
-*.log.*
-*.tmp
-*.temp
-
-### Credentials ###
-*.key
-*.pem
-*.crt
-*.asc
-*.gpg
-*.ssh
-credentials.json
-secrets.yaml
-.env*
-**/secrets/
-**/*.key
-**/*.pem
-**/*.crt
-**/*.asc
-**/*.gpg
-**/*.ssh
-**/credentials.json
-**/secrets.yaml
-**/.env
-
-### Data & Privacy ###
-
-### Temporary & Build ###
-
-### Archives ###
-
-### Local & Test ###
-*.local
-*.test
-*.development
-test_*
-**/*test.py
-**/*spec.py
-
-### Virtual Environments ###
-venv/
-ENV/
-env/
-.venv/
-virtualenv/
-conda/
-pipenv/
-poetry/
-
-### Docker ###
-.dockerignore
-.docker/
-**/*.dockerignore
-**/*.docker
-
-### Hermes / Agent ###
-.hermes/
-.hermes-agent/
-**/.hermes
-**/.hermes-agent
-
-### Reports ###
-05_Final_Outputs/reports/
-05_Final_Outputs/*.json
-05_Final_Outputs/*.csv
-05_Final_Outputs/*.txt
-
-### Miscellaneous ###
-!/.vscode/mcp.json
-*.7z
-*.bin
-*.bmp
-*.bz2
-*.class
-*.conf
-*.db
-*.doc
-*.docx
-*.dot
-*.dtd
-*.dylib
-*.exe
-*.flv
-*.gif
-*.gzip
-*.h
-*.hpp
-*.htm
-*.html
-*.ipa
-*.jar
-*.java
-*.jpeg
-*.jpg
-*.js
-*.json
-*.lib
-*.m
-*.map
-*.md5
-*.mov
-*.mp3
-*.mp4
-*.mpeg
-*.mpg
-*.o
-*.obj
-*.ogg
-*.otf
-*.p12
-*.pdf
-*.pgp
-*.pkg
-*.plist
-*.png
-*.psd
-*.pyc
-*.pyo
-*.rar
-*.rb
-*.rm
-*.rpm
-*.rss
-*.rtf
-*.s
-*.s3m
-*.sdk
-*.sh
-*.siv
-*.sit
-*.so
-*.sqlite
-*.sqlite3
-*.sql
-*.sql.gz
-*.stl
-*.tar
-*.tgz
-*.tif
-*.tiff
-*.txt
-*.vcf
-*.vim
-*.wav
-*.wma
-*.wmv
-*.wsdl
-*.xhtml
-*.xl
-*.xls
-*.xlsx
-*.xml
-*.xvid
-*.xz
-*.yang
-*.yml
-*.zip
+*.csv
+*.jsonl

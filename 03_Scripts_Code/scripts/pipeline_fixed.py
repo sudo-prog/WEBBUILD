@@ -442,15 +442,40 @@ def main():
                    help="Lead source")
     p.add_argument("--limit", type=int, default=500, help="Max leads per city")
     p.add_argument("--dry-run", action="store_true", help="Validate only, no DB writes")
-    p.add_argument("--config", default="config/settings.json")
+    p.add_argument("--config", default="config/settings.json",
+                   help="Path to config file (default: config/settings.json)")
     args = p.parse_args()
 
     if not args.city and not args.all:
         p.error("Specify --city <name> or --all")
 
-    cfg = load_config()
+    # Load config: first try the provided config file, then fallback to env vars
+    cfg = {}
     if args.config and Path(args.config).exists():
         cfg = json.loads(Path(args.config).read_text())
+    else:
+        # Fallback to environment variables
+        cfg = {
+            "postgres": {
+                "host": os.getenv("PG_HOST", "db.psnosfonkujbcxdcrnpu.supabase.co"),
+                "port": int(os.getenv("PG_PORT", "5432")),
+                "database": os.getenv("PG_DATABASE", "postgres"),
+                "user": os.getenv("PG_USER", "postgres"),
+                "password": os.getenv("PG_PASSWORD", ""),
+            },
+            "ingestion": {"batch_size": 100}
+        }
+
+    # If config file was provided but missing password, try to get it from env var
+    if args.config and Path(args.config).exists():
+        if not cfg["postgres"].get("password"):
+            password = os.getenv("PG_PASSWORD")
+            if password:
+                cfg["postgres"]["password"] = password
+                log.debug(f"Added password from PG_PASSWORD env var")
+            elif not args.dry_run:
+                log.error("No DB password in config and PG_PASSWORD env var not set. Use --dry-run or set PG_PASSWORD.")
+                sys.exit(1)
 
     if not cfg["postgres"].get("password") and not args.dry_run:
         log.error("No DB password set. Use --dry-run or set PG_PASSWORD env var.")
