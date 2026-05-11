@@ -1,0 +1,76 @@
+{
+  "generated_at": "2026-05-04T11:26:49.726678",
+  "total_leads": 25,
+  "cities": {
+    "Brisbane": {
+      "total": 5,
+      "priority_distribution": {
+        "HIGH": 0,
+        "MEDIUM": 0,
+        "LOW": 5,
+        "DISCARD": 0
+      },
+      "avg_quality_score": 47.0,
+      "avg_activity_score": 0.0,
+      "avg_revenue_proxy": 2.0,
+      "pct_three_sources": 100.0,
+      "pct_phone_active": 0.0
+    },
+    "Sydney": {
+      "total": 5,
+      "priority_distribution": {
+        "HIGH": 2,
+        "MEDIUM": 0,
+        "LOW": 3,
+        "DISCARD": 0
+      },
+      "avg_quality_score": 59.0,
+      "avg_activity_score": 0.0,
+      "avg_revenue_proxy": 12.0,
+      "pct_three_sources": 100.0,
+      "pct_phone_active": 0.0
+    },
+    "Melbourne": {
+      "total": 5,
+      "priority_distribution": {
+        "HIGH": 0,
+        "MEDIUM": 0,
+        "LOW": 5,
+        "DISCARD": 0
+      },
+      "avg_quality_score": 45.2,
+      "avg_activity_score": 1.0,
+      "avg_revenue_proxy": 2.0,
+      "pct_three_sources": 100.0,
+      "pct_phone_active": 20.0
+    },
+    "Perth": {
+      "total": 5,
+      "priority_distribution": {
+        "HIGH": 0,
+        "MEDIUM": 0,
+        "LOW": 5,
+        "DISCARD": 0
+      },
+      "avg_quality_score": 47.0,
+      "avg_activity_score": 0.0,
+      "avg_revenue_proxy": 2.0,
+      "pct_three_sources": 100.0,
+      "pct_phone_active": 0.0
+    },
+    "Darwin": {
+      "total": 5,
+      "priority_distribution": {
+        "HIGH": 1,
+        "MEDIUM": 0,
+        "LOW": 4,
+        "DISCARD": 0
+      },
+      "avg_quality_score": 49.4,
+      "avg_activity_score": 2.0,
+      "avg_revenue_proxy": 7.0,
+      "pct_three_sources": 100.0,
+      "pct_phone_active": 40.0
+    }
+  }
+}

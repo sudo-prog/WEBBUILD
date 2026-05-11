@@ -21,7 +21,7 @@ CITIES = [
     ("Darwin",    "NT"),
 ]
 
-OUTPUT_DIR = Path("/home/thinkpad/Projects/supabase_australia/raw_leads")
+OUTPUT_DIR = Path("/home/thinkpad/Projects/active/WEBBUILD/supabase_australia/raw_leads")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Selectors (as of 2026)

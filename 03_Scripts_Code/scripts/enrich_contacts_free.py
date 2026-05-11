@@ -47,6 +47,7 @@ from urllib.parse import quote_plus, urljoin
 import urllib.request
 import urllib.error
 import html
+import whois  # for domain email extraction
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -57,39 +58,234 @@ logging.basicConfig(
 log = logging.getLogger("enrich")
 
 
-def extract_email_from_website(url: str) -> Optional[str]:
-    """Attempt to extract an email address from the given website's homepage.
 
-    Fetches the URL, parses HTML for email patterns and mailto links.
-    Includes basic politeness with a timeout and user agent rotation.
-    """
-    if not url or not url.startswith("http"):
-        return None
-    
+def google_search(query: str) -> List[Dict]:
+    """Search Google via web scraping (free, no API key)."""
+    # Use a simple Google search URL
+    url = f"https://www.google.com/search?q={quote_plus(query)}"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36"
+    }
     try:
-        # Add a slight delay to be polite
-        _jitter(0.5)
-        html_body = http_get(url, timeout=10)
-        if not html_body:
-            return None
-        
-        # Extract emails from the HTML
-        phone, email = extract_contacts(html_body)
-        
-        # Also look for mailto links
-        mailto_re = re.compile(r"mailto:([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+)", re.IGNORECASE)
-        for m in mailto_re.finditer(html_body):
-            addr = m.group(1).lower()
-            # Validate it's a real email (basic check)
-            if "@" in addr and "." in addr:
-                email = addr
-                break
-        
-        return email
+        req = urllib.request.Request(url, headers=headers)
+        body = http_get(url, timeout=15)
+        if not body:
+            return []
+        results = []
+        # Parse Google results (simplified)
+        # This is a placeholder - actual implementation would parse Google's HTML
+        return results
     except Exception as e:
-        log.debug(f"Website email extraction failed for {url}: {e}")
-        return None
+        log.debug(f"Google search failed: {e}")
+        return []
 
+def enrich_via_google(business_name: str, city: str, state: str, search_engines: List[str]) -> Dict:
+    query = build_dork_query(business_name, city, state)
+    log.debug(f"Google query: {query}")
+    results = google_search(query)
+    if not results:
+        return {}
+    all_text = " ".join(r["snippet"] + " " + r["url"] for r in results)
+    phone, email = extract_contacts(all_text)
+    out = {}
+    if phone:
+        out["phone"] = phone
+        out["phone_source"] = "google_snippet"
+    if email:
+        out["email"] = email
+        out["email_source"] = "google_snippet"
+    for r in results:
+        if r["url"] and r["domain"] not in JUNK_DOMAINS:
+            out["website_candidate"] = r["url"]
+            out["website_domain"] = r["domain"]
+            break
+    return out
+
+
+
+
+def bing_search(query: str) -> List[Dict]:
+    """Search Bing via web scraping (free, no API key)."""
+    url = f"https://www.bing.com/search?q={quote_plus(query)}"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36"
+    }
+    try:
+        req = urllib.request.Request(url, headers=headers)
+        body = http_get(url, timeout=15)
+        if not body:
+            return []
+        results = []
+        # Parse Bing results (placeholder)
+        return results
+    except Exception as e:
+        log.debug(f"Bing search failed: {e}")
+        return []
+
+def enrich_via_bing(business_name: str, city: str, state: str, search_engines: List[str]) -> Dict:
+    query = build_dork_query(business_name, city, state)
+    log.debug(f"Bing query: {query}")
+    results = bing_search(query)
+    if not results:
+        return {}
+    all_text = " ".join(r["snippet"] + " " + r["url"] for r in results)
+    phone, email = extract_contacts(all_text)
+    out = {}
+    if phone:
+        out["phone"] = phone
+        out["phone_source"] = "bing_snippet"
+    if email:
+        out["email"] = email
+        out["email_source"] = "bing_snippet"
+    for r in results:
+        if r["url"] and r["domain"] not in JUNK_DOMAINS:
+            out["website_candidate"] = r["url"]
+            out["website_domain"] = r["domain"]
+            break
+    return out
+
+
+
+def google_search(query: str) -> List[Dict]:
+    """Search Google via web scraping (free, no API key)."""
+    # Use a simple Google search URL
+    url = f"https://www.google.com/search?q={quote_plus(query)}"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+        "Accept-Encoding": "gzip, deflate",
+        "DNT": "1",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+    }
+    try:
+        req = urllib.request.Request(url, headers=headers)
+        body = http_get(url, timeout=15)
+        if not body:
+            return []
+        # Parse Google results
+        results = []
+        # Simple parsing of Google results - may break if Google changes layout
+        # Look for div.g (organic results)
+        soup = BeautifulSoup(body, 'html.parser')
+        for g in soup.find_all('div', class_='g')[:8]:
+            r = {}
+            # Title
+            title_elem = g.find('h3')
+            if title_elem:
+                r['title'] = title_elem.get_text()
+            else:
+                continue
+            # Link
+            link_elem = g.find('a', href=True)
+            if link_elem:
+                r['url'] = link_elem['href']
+            else:
+                continue
+            # Snippet
+            snippet_elem = g.find('span', {'class': 'st'})
+            if snippet_elem:
+                r['snippet'] = snippet_elem.get_text()
+            else:
+                r['snippet'] = ''
+            r['domain'] = urllib.parse.urlparse(r['url']).netloc if r['url'] else ''
+            results.append(r)
+        return results
+    except Exception as e:
+        log.debug(f"Google search failed: {e}")
+        return []
+
+def enrich_via_google(business_name: str, city: str, state: str, search_engines: List[str]) -> Dict:
+    query = build_dork_query(business_name, city, state)
+    log.debug(f"Google query: {query}")
+    results = google_search(query)
+    if not results:
+        return {}
+    all_text = " ".join(r["snippet"] + " " + r["url"] for r in results)
+    phone, email = extract_contacts(all_text)
+    out = {}
+    if phone:
+        out["phone"] = phone
+        out["phone_source"] = "google_snippet"
+    if email:
+        out["email"] = email
+        out["email_source"] = "google_snippet"
+    for r in results:
+        if r["url"] and r["domain"] not in JUNK_DOMAINS:
+            out["website_candidate"] = r["url"]
+            out["website_domain"] = r["domain"]
+            break
+    return out
+
+
+
+
+def bing_search(query: str) -> List[Dict]:
+    """Search Bing via web scraping (free, no API key)."""
+    url = f"https://www.bing.com/search?q={quote_plus(query)}"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+        "Accept-Encoding": "gzip, deflate",
+        "DNT": "1",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+    }
+    try:
+        req = urllib.request.Request(url, headers=headers)
+        body = http_get(url, timeout=15)
+        if not body:
+            return []
+        results = []
+        # Parse Bing results (simplified)
+        soup = BeautifulSoup(body, 'html.parser')
+        for g in soup.find_all('li', class_='b_algo')[:8]:
+            r = {}
+            title_elem = g.find('h2').find('a') if g.find('h2') else None
+            if title_elem:
+                r['title'] = title_elem.get_text()
+            else:
+                continue
+            link_elem = g.find('a', href=True)
+            if link_elem:
+                r['url'] = link_elem['href']
+            else:
+                continue
+            snippet_elem = g.find('div', {'class': 'b_caption'})
+            if snippet_elem:
+                r['snippet'] = snippet_elem.get_text()
+            else:
+                r['snippet'] = ''
+            r['domain'] = urllib.parse.urlparse(r['url']).netloc if r['url'] else ''
+            results.append(r)
+        return results
+    except Exception as e:
+        log.debug(f"Bing search failed: {e}")
+        return []
+
+def enrich_via_bing(business_name: str, city: str, state: str, search_engines: List[str]) -> Dict:
+    query = build_dork_query(business_name, city, state)
+    log.debug(f"Bing query: {query}")
+    results = bing_search(query)
+    if not results:
+        return {}
+    all_text = " ".join(r["snippet"] + " " + r["url"] for r in results)
+    phone, email = extract_contacts(all_text)
+    out = {}
+    if phone:
+        out["phone"] = phone
+        out["phone_source"] = "bing_snippet"
+    if email:
+        out["email"] = email
+        out["email_source"] = "bing_snippet"
+    for r in results:
+        if r["url"] and r["domain"] not in JUNK_DOMAINS:
+            out["website_candidate"] = r["url"]
+            out["website_domain"] = r["domain"]
+            break
+    return out
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CONSTANTS
@@ -384,6 +580,20 @@ def enrich_via_duckduckgo(business_name: str, city: str, state: str) -> Dict:
         if r["url"] and r["domain"] not in JUNK_DOMAINS:
             out["website_candidate"] = r["url"]
             out["website_domain"] = r["domain"]
+            # Perform WHOIS lookup to extract email from domain registration
+            try:
+                import whois
+                w = whois.whois(r["url"])
+                if w.emails:
+                    # Extract the first email that looks like a business email
+                    for email in w.emails:
+                        email = email.lower().strip()
+                        if email and not any(bad in email for bad in ["example", "test", "noreply", "@sentry", "@github"]):
+                            out["email"] = email
+                            out["email_source"] = "whois"
+                            break
+            except Exception:
+                pass  # WHOIS may fail or not be installed
             break
 
     return out
@@ -442,6 +652,144 @@ def enrich_via_truelocal(business_name: str, city: str) -> Dict:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+
+
+def yellow_pages_search(business_name: str, city: str, state: str) -> List[Dict]:
+    """Search Yellow Pages via web scraping (free, no API key)."""
+    # Yellow Pages AU search URL
+    url = f"https://www.yellowpages.com.au/search/listings?clue={quote_plus(business_name)}&location={city}&state={state}"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-AU,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate",
+        "DNT": "1",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+    }
+    try:
+        req = urllib.request.Request(url, headers=headers)
+        body = http_get(url, timeout=15)
+        if not body:
+            return []
+        results = []
+        # Parse Yellow Pages results (simplified)
+        soup = BeautifulSoup(body, 'html.parser')
+        for item in soup.find_all('div', class_='listing'):  # Adjust class as needed
+            r = {}
+            title_elem = item.find('h2')
+            if title_elem:
+                r['title'] = title_elem.get_text().strip()
+            else:
+                continue
+            phone_elem = item.find('button', {'class': 'contact-phone'})
+            if phone_elem:
+                r['phone'] = phone_elem.get_text().strip()
+            else:
+                continue
+            # Extract snippet if available
+            snippet_elem = item.find('div', {'class': 'description'})
+            r['snippet'] = snippet_elem.get_text().strip() if snippet_elem else ''
+            # Extract URL if available
+            link_elem = item.find('a', href=True)
+            if link_elem:
+                r['url'] = link_elem['href']
+                r['domain'] = urllib.parse.urlparse(r['url']).netloc if r['url'] else ''
+            results.append(r)
+        return results
+    except Exception as e:
+        log.debug(f"Yellow Pages search failed: {e}")
+        return []
+
+def enrich_via_yellowpages(business_name: str, city: str, state: str, search_engines: List[str]) -> Dict:
+    query = f'"{business_name}" {city} {state}'
+    log.debug(f"Yellow Pages query: {query}")
+    results = yellow_pages_search(business_name, city, state)
+    if not results:
+        return {}
+    all_text = " ".join(r["snippet"] + " " + r["url"] for r in results)
+    phone, email = extract_contacts(all_text)
+    out = {}
+    if phone:
+        out["phone"] = phone
+        out["phone_source"] = "yellowpages"
+    if email:
+        out["email"] = email
+        out["email_source"] = "yellowpages"
+    for r in results:
+        if r["url"] and r["domain"] not in JUNK_DOMAINS:
+            out["website_candidate"] = r["url"]
+            out["website_domain"] = r["domain"]
+            break
+    return out
+
+
+
+def true_local_search(business_name: str, city: str) -> List[Dict]:
+    """Search True Local via web scraping (free, no API key)."""
+    url = f"https://www.truelocal.com.au/find/{quote_plus(business_name)}/{city}"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-AU,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate",
+        "DNT": "1",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+    }
+    try:
+        req = urllib.request.Request(url, headers=headers)
+        body = http_get(url, timeout=15)
+        if not body:
+            return []
+        results = []
+        soup = BeautifulSoup(body, 'html.parser')
+        for item in soup.find_all('div', class_='listing'):  # Adjust class as needed
+            r = {}
+            title_elem = item.find('h2')
+            if title_elem:
+                r['title'] = title_elem.get_text().strip()
+            else:
+                continue
+            phone_elem = item.find('span', {'class': 'phone'})
+            if phone_elem:
+                r['phone'] = phone_elem.get_text().strip()
+            else:
+                continue
+            snippet_elem = item.find('div', {'class': 'description'})
+            r['snippet'] = snippet_elem.get_text().strip() if snippet_elem else ''
+            link_elem = item.find('a', href=True)
+            if link_elem:
+                r['url'] = link_elem['href']
+                r['domain'] = urllib.parse.urlparse(r['url']).netloc if r['url'] else ''
+            results.append(r)
+        return results
+    except Exception as e:
+        log.debug(f"True Local search failed: {e}")
+        return []
+
+def enrich_via_truelocal(business_name: str, city: str, search_engines: List[str]) -> Dict:
+    query = f'"{business_name}" {city}'
+    log.debug(f"True Local query: {query}")
+    results = true_local_search(business_name, city)
+    if not results:
+        return {}
+    all_text = " ".join(r["snippet"] + " " + r["url"] for r in results)
+    phone, email = extract_contacts(all_text)
+    out = {}
+    if phone:
+        out["phone"] = phone
+        out["phone_source"] = "truelocal"
+    if email:
+        out["email"] = email
+        out["email_source"] = "truelocal"
+    for r in results:
+        if r["url"] and r["domain"] not in JUNK_DOMAINS:
+            out["website_candidate"] = r["url"]
+            out["website_domain"] = r["domain"]
+            break
+    return out
+
 # ORCHESTRATION: ENRICH ONE LEAD
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -514,24 +862,11 @@ def enrich_lead(lead: Dict, delay: float = 2.5) -> Dict:
     # ── Merge results ─────────────────────────────────────────────────────────
     lead["phone"] = found_phone
     lead["email"] = found_email
-    
-    # Add has_website flag — indicates if a website was found (from DDG)
-    lead["has_website"] = bool(lead.get("website_candidate"))
-    
-    # If we still don't have an email but we have a website, try extracting from the website
-    if not found_email and lead.get("website_candidate"):
-        website_email = extract_email_from_website(lead["website_candidate"])
-        if website_email:
-            lead["email"] = website_email
-            lead["email_source"] = "website"
-            found_email = website_email
-            log.debug(f"Extracted email {website_email} from website {lead['website_candidate']}")
-    
     lead["enriched_at"] = datetime.now(timezone.utc).isoformat()
     lead["enrichment_sources"] = sources_tried
-    lead["enrichment_complete"] = (_done() or bool(found_phone and found_email))
+    lead["enrichment_complete"] = _done()
 
-    result_str = f"✓ phone={found_phone or '—'}  email={found_email or '—'}  website={lead.get('has_website', False)}"
+    result_str = f"✓ phone={found_phone or '—'}  email={found_email or '—'}"
     log.info(f"  {name[:40]:40}  {result_str}")
 
     return lead

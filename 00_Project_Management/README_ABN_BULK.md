@@ -104,7 +104,7 @@ python3 scripts/weekly_abn_pipeline.py
 
 ```bash
 # Every Monday 02:00 UTC
-0 2 * * 1 cd /home/thinkpad/Projects/supabase_australia && \
+0 2 * * 1 cd /home/thinkpad/Projects/active/WEBBUILD/supabase_australia && \\
   /home/thinkpad/.hermes/hermes-agent/venv/bin/python scripts/weekly_abn_pipeline.py \
   >> /home/thinkpad/.hermes/logs/weekly_abn.log 2>&1
 ```

@@ -3,7 +3,7 @@
 import re, json, sys
 from pathlib import Path
 
-pipeline_path = Path("/home/thinkpad/Projects/supabase_australia/ingestion_pipeline.py")
+pipeline_path = Path("/home/thinkpad/Projects/active/WEBBUILD/supabase_australia/ingestion_pipeline.py")
 orig = pipeline_path.read_text()
 
 # Backup

@@ -26,7 +26,7 @@ _YP_LOOKUP = None  # dict: (name_lower, city_lower) -> record dict
 def _load_yp_lookup():
     global _YP_LOOKUP
     if _YP_LOOKUP is not None: return _YP_LOOKUP
-    yp_dir = Path("/home/thinkpad/Projects/supabase_australia/raw_leads/yellow_pages_batch")
+    yp_dir = Path("/home/thinkpad/Projects/active/WEBBUILD/supabase_australia/raw_leads/yellow_pages_batch")
     candidates = sorted(yp_dir.glob("yp_batch_*.jsonl"), reverse=True)
     if not candidates:
         return None

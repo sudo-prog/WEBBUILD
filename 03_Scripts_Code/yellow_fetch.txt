@@ -1,0 +1,35 @@
+    def _fetch_yellow_pages(self) -> List[Dict]:
+        """Real Yellow Pages AU — filters: email present AND no website."""
+        import requests
+        results = []
+        city = self.city_key
+        state = self.city_config.get("state", "NSW")
+        location = f"{{city.title()}} {{state}}"
+        categories = ["plumber","electrician","builder","painter","carpenter",
+                     "roofer","air conditioning","kitchen","flooring","solar"]
+        for category in categories:
+            try:
+                r = requests.get("https://www.yellowpages.com.au/search/listings",
+                                params={{"clue": category, "locationClue": location, "pageNumber": 1}},
+                                headers={{"User-Agent": "Mozilla/5.0 (compatible; LeadGenBot/1.0)"}},
+                                timeout=15)
+                if r.status_code != 200:
+                    continue
+                for item in r.json().get("results", []):
+                    if item.get("email") and not item.get("website"):
+                        results.append({{
+                            "business_name": item.get("name", "").strip(),
+                            "category": category,
+                            "phone": item.get("phone", "").strip() or None,
+                            "email": item.get("email", "").strip().lower(),
+                            "website": None,
+                            "city": city.title(), "state": state,
+                            "suburb": item.get("suburb"),
+                            "postcode": item.get("postcode"),
+                            "address_full": item.get("address"),
+                            "source": "yellow_pages",
+                            "abn": item.get("abn")
+                        }})
+            except Exception as e:
+                self.logger.debug(f"YP {{category}} error: {{e}}")
+        return results

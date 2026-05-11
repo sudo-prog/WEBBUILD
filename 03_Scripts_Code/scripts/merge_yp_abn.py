@@ -5,9 +5,9 @@ import json, re, sys
 from pathlib import Path
 from collections import defaultdict
 
-YP_DIR        = Path("/home/thinkpad/Projects/supabase_australia/raw_leads/yellow_pages")
+YP_DIR = Path("/home/thinkpad/Projects/active/WEBBUILD/supabase_australia/raw_leads/yellow_pages")
 ABN_LEADS_DIR = Path("/home/thinkpad/data/abn/leads")
-OUTPUT_PATH   = Path("/home/thinkpad/Projects/supabase_australia/data/weekly_leads.json")
+OUTPUT_PATH = Path("/home/thinkpad/Projects/active/WEBBUILD/supabase_australia/data/weekly_leads.json")
 
 # Check input paths exist before proceeding
 if not YP_DIR.exists():
@@ -47,7 +47,7 @@ print(f"  Loaded {len(abn_records):,} ABN trade records")
 
 by_state = defaultdict(list)
 for r in abn_records:
-    by_state[r.get('address_state','')].append(r)
+    by_state[r.get('state','').upper()].append(r)
 
 print("Loading YP leads...")
 yp_leads = []

@@ -2,7 +2,7 @@
 import re
 from pathlib import Path
 
-base = Path("/home/thinkpad/Projects/supabase_australia")
+base = Path("/home/thinkpad/Projects/active/WEBBUILD/supabase_australia")
 p = base / "ingestion_pipeline.py"
 orig = p.read_text()
 p.with_suffix(".py.bak").write_text(orig)

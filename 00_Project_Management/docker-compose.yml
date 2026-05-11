@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: supabase/postgres:16.1.0
+    container_name: supabase_postgres
+    restart: unless-stopped
+    ports:
+      - "6543:5432"
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-supabase_local_dev_password}
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./schema:/docker-entrypoint-initdb.d:ro  # Auto-run SQL on first start
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Optional: Supabase Studio (http://localhost:8080)
+  # Uncomment if you want full Supabase Studio UI
+  # studio:
+  #   image: supabase/studio:20240620
+  #   container_name: supabase_studio
+  #   restart: unless-stopped
+  #   ports:
+  #     - "8080:8080"
+  #   environment:
+  #     SUPABASE_URL: http://postgres:5432
+  #     SUPABASE_DB_PASSWORD: ${POSTGRES_PASSWORD:-supabase_local_dev_password}
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+
+volumes:
+  postgres_data:

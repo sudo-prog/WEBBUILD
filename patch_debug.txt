@@ -1,0 +1,13 @@
+--- a/03_Scripts_Code/scripts/pipeline_fixed.py
++++ b/03_Scripts_Code/scripts/pipeline_fixed.py
+@@ -419,6 +419,9 @@ args = p.parse_args()
+ 
+     if not args.city and not args.all:
+         p.error("Specify --city <name> or --all")
++
++    cfg = load_config()
++    if args.config and Path(args.config).exists():
++        cfg = json.loads(Path(args.config).read_text())
+ 
+     if not cfg["postgres"].get("password") and not args.dry_run:
+         log.error("No DB password set. Use --dry-run or set PG_PASSWORD env var.")

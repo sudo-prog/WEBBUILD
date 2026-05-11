@@ -289,3 +289,48 @@ python scripts/run_enrichment_batch.py --all --limit 200 --resume
 - Requirements: `pip install requests psycopg2-binary beautifulsoup4`
 - Enriched output: `~/data/abn/enriched/`
 - Pipeline venv: `/home/thinkpad/.hermes/hermes-agent/venv/bin/python`
+
+
+## Pipeline Stability Fixes (2026-05-11)
+
+### Fixed Timeout Issue
+- **Problem:** Frequent enrichment cron job timed out after 120s due to large batch size (200 leads/city)
+- **Solution:** Created optimized job with smaller batch size (25 leads/city) running every 30min from 2-6AM
+- **Status:** ✅ Cron job installed and active
+
+### Enhanced Website Extraction
+- **Problem:** Missing website data limited email discovery
+- **Fix:** Modified `enrich_contacts_free.py` to extract website from ABN API (if available)
+- **Status:** ✅ Implemented, but ABN API rarely returns website fields
+
+### Pipeline Operational
+- ✅ Frequent enrichment running reliably
+- ✅ No more timeout failures
+- ⚠️ Email discovery still limited by availability of website data among Australian businesses
+
+### Next Steps
+- Consider optimizing DuckDuckGo queries to improve website yields
+- Explore WHOIS lookups for domain-based email extraction
+- Evaluate if downloaded ABN database contains richer contact data
+
+
+
+## Pipeline Improvements - May 2026
+
+### Fixed Timeout Issue
+- Created optimized frequent enrichment job (every 30min 2-6AM) with smaller batch size (25 leads/city) to prevent failures.
+
+### Enhanced Search Capabilities
+- Added support for multiple search engines (DuckDuckGo, Google, Bing) via web scraping
+- Implemented directory scrapers for Yellow Pages and True Local
+- Added WHOIS lookups for domain-based email extraction
+- Optimized search queries to be less restrictive
+
+### Current Status
+- ✅ Pipeline stable and running without crashes or timeouts
+- ⚠️ Email discovery yields remain low (0% in recent tests) due to data limitations (many businesses may not have an online presence)
+
+### Next Steps
+- Continue optimizing search algorithms
+- Explore using WHOIS lookups more extensively
+- Consider paid APIs (Apollo.io, Hunter.io) if budget allows

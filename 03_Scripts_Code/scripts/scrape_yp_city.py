@@ -8,38 +8,17 @@ CATEGORIES = [
     "roofer", "air conditioning", "kitchen", "flooring", "solar"
 ]
 
-OUTPUT_DIR = Path("/home/thinkpad/Projects/supabase_australia/raw_leads/yellow_pages")
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+TRADE_KEYWORDS = [
+    'plumb', 'elec', 'build', 'paint', 'carpet', 'roof', 'air', 'cond', 'kitchen', 'floor', 'solar',
+    'construct', 'renov', 'repair', 'service', 'contractor', 'install', 'heat', 'cool', 'bath', 'tile'
+]
 
-LISTING_SEL = 'div.v-card'
-NAME_SEL     = 'h2.n a.business-name'
-PHONE_SEL    = 'div.phones.phone.primary'
-ADDR_STREET  = 'div.street-address'
-ADDR_LOC     = 'div.locality'
-WEBSITE_SEL  = 'a[href^="http"]'
-EXCLUDED_DOMAINS = ['yellowpages.com.au','yellow.com.au','thryv.com.au','directoryselect.com']
-SKIP_PATTERNS = ['privacy','terms','login','account','my.yellow','facebook','twitter']
-
-def has_external_website(card) -> bool:
-    try:
-        for el in card.query_selector_all(WEBSITE_SEL):
-            href = (el.get_attribute('href') or '').lower()
-            if any(excl in href for excl in EXCLUDED_DOMAINS): continue
-            if any(skip in href for skip in SKIP_PATTERNS): continue
+def contains_trade_keyword(name):
+    name_lower = name.lower()
+    for kw in TRADE_KEYWORDS:
+        if kw in name_lower:
             return True
-    except Exception:
-        pass
     return False
-
-def scrape_city(page, city, state, max_pages: int = 1) -> list:
-    location = f"{city.title()} {state}"
-    results = []
-    for page_num in range(1, max_pages+1):
-        url = f"https://www.yellowpages.com.au/search/listings?clue=&locationClue={location}&pageNumber={page_num}"  # general search for all categories? We'll filter by category below.
-        # Actually we need per category to get trade relevance
-        # We'll iterate categories outside
-        pass
-    return results
 
 def main():
     parser = argparse.ArgumentParser()
@@ -51,25 +30,34 @@ def main():
 
     all_leads = []
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36")
+        browser = p.chromium.launch(headless=True, channel="chromium")
+        page = browser.new_page(
+    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"
+)
         try:
             for category in CATEGORIES:
                 url = f"https://www.yellowpages.com.au/search/listings?clue={category}&locationClue={args.city.title()} {args.state}&pageNumber=1"
                 try:
                     page.goto(url, wait_until="networkidle", timeout=30000)
                     page.wait_for_timeout(random.randint(1500,2500))
-                    cards = page.query_selector_all(LISTING_SEL)
+                    cards = page.query_selector_all('div.v-card')
                     print(f"  {category}: {len(cards)} listings")
                     for card in cards:
                         try:
-                            name_el = card.query_selector(NAME_SEL)
+                            name_el = card.query_selector('h2.n a.business-name')
                             name = name_el.inner_text().strip() if name_el else ""
                             if not name: continue
-                            phone_el = card.query_selector(PHONE_SEL)
+                            
+                            # DEBUG: Print business name
+                            print(f"    Found: {name}")
+                            
+                            if not contains_trade_keyword(name):
+                                continue
+                            
+                            phone_el = card.query_selector('div.phones.phone.primary')
                             phone = phone_el.inner_text().strip() if phone_el else ""
-                            street_el = card.query_selector(ADDR_STREET)
-                            loc_el    = card.query_selector(ADDR_LOC)
+                            street_el = card.query_selector('div.street-address')
+                            loc_el    = card.query_selector('div.locality')
                             address = ""
                             if street_el and loc_el:
                                 address = f"{street_el.inner_text().strip()}, {loc_el.inner_text().strip()}"
@@ -87,16 +75,13 @@ def main():
                         except Exception:
                             continue
                     time.sleep(args.delay)
-                except PlaywrightTimeoutError:
-                    print(f"  Timeout for {category}")
-                    continue
-                except Exception as e:
-                    print(f"  Error in {category}: {e}")
+                except Exception:
+                    print(f"  Error in {category}")
                     continue
         finally:
             browser.close()
 
-    # Deduplicate by name+city
+    # Deduplicate
     seen = set()
     uniq = []
     for lead in all_leads:
@@ -104,9 +89,10 @@ def main():
         if key not in seen:
             seen.add(key)
             uniq.append(lead)
-
+    
     ts = time.strftime("%Y%m%d_%H%M%S")
-    out_path = OUTPUT_DIR / f"yp_{args.city.lower()}_{args.state.lower()}_{ts}.json"
+    out_path = Path(f"raw_leads/yellow_pages/yp_{args.city.lower()}_{args.state.lower()}_{ts}.json")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(uniq, indent=2))
     no_web = sum(1 for l in uniq if not l['has_website'])
     print(f"\n✅ {args.city}: {len(uniq)} unique ({no_web} no-website) → {out_path.name}")

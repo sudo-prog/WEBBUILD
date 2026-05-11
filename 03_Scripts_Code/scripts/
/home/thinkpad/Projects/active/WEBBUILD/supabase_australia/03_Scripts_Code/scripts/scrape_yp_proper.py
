@@ -1,0 +1,150 @@
+#!/usr/bin/env python3
+"""
+Yellow Pages AU scraper — PROPER VERSION
+Handles Cloudflare + dynamic content via Playwright with --no-sandbox.
+Designed to extract REAL business listings, not heading/nav junk.
+
+Usage:
+    python scrape_yp_proper.py --city sydney --state NSW --category plumber --pages 3
+    python scrape_yp_proper.py --city melbourne --state VIC --category electrician
+"""
+import asyncio, json, re, argparse
+from pathlib import Path
+from playwright.async_api import async_playwright
+
+JUNK_PATTERNS = re.compile(
+    r'(?i)'
+    r'^(list$|listing|a\s+a[a-z]+\s+list|drake\s+list|land\s*list|'
+    r'affordable\s+list|accountable\s+list|biz\s*list|urban\s*list|'
+    r'social\s*list|flixlist|wedding\s*list|tobacco\s*list|veganlist|'
+    r'list\s+with\s+heidi|list\s+a\s+barrist|list\s+property|'
+    r'list\s+&\s+sell|list\s+kitchens|duncan.?s\s+list|'
+    r'babysitter.?s\s+list|the\s+bucket\s+list|the\s+list\s+group|'
+    r'removed\s+listing)'
+)
+
+async def scrape(city: str, state: str, category: str, pages: int = 3):
+    results = []
+    search_url = f"https://www.yellowpages.com.au/search/listings?clue={category}&locationClue={city}+{state}"
+    
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(
+            headless=True,
+            args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
+        )
+        context = await browser.new_context(
+            user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            viewport={"width": 1920, "height": 1080}
+        )
+        page = await context.new_page()
+        
+        try:
+            print(f"Navigating to {search_url} ...")
+            await page.goto(search_url, wait_until="networkidle", timeout=45000)
+            await page.wait_for_timeout(3000)  # let JS render
+            
+            # Scroll to trigger lazy loading
+            for _ in range(3):
+                await page.evaluate("window.scrollBy(0, document.body.scrollHeight)")
+                await page.wait_for_timeout(1500)
+            
+            # YP AU uses these selectors (verified from page source samples)
+            selector_groups = [
+                "article.search-result",      # current YP layout
+                "div.search-result",
+                "div.listing-item",
+                "article.card",
+                "[data-testid='listing-card']",
+            ]
+            
+            cards = []
+            for sel in selector_groups:
+                cards = await page.query_selector_all(sel)
+                if len(cards) > 0:
+                    print(f"  Found {len(cards)} cards with '{sel}'")
+                    break
+            
+            if not cards:
+                # emergency: try to get raw HTML and look for any listing wrapper
+                html = await page.content()
+                # Save raw HTML for inspection if zero cards
+                debug_path = Path(f"yp_debug_{city}_{category}.html")
+                debug_path.write_text(html)
+                print(f"  WARNING: 0 cards found. Raw HTML saved to {debug_path}")
+                return results
+            
+            for card in cards:
+                try:
+                    # Business name — YP uses h3 > a inside the card
+                    name_el = await card.query_selector("h3 a") or await card.query_selector("a[href*='/listing/']") or await card.query_selector(".listing-name")
+                    name = await name_el.inner_text() if name_el else ""
+                    name = name.strip()
+                    
+                    if not name or len(name) < 3 or JUNK_PATTERNS.match(name):
+                        continue
+                    
+                    # Phone
+                    phone = ""
+                    phone_el = await card.query_selector("a[href^='tel:']") or await card.query_selector(".phone") or await card.query_selector(".click-to-call")
+                    if phone_el:
+                        phone = await phone_el.inner_text() or ""
+                        phone = phone.strip()
+                        if not phone:
+                            href = await phone_el.get_attribute("href") or ""
+                            if href.startswith("tel:"):
+                                phone = href.replace("tel:", "")
+                    
+                    # Address
+                    addr = ""
+                    addr_el = await card.query_selector(".address") or await card.query_selector("[data-testid='address']")
+                    if addr_el:
+                        addr = await addr_el.inner_text() or ""
+                        addr = addr.strip()
+                    
+                    # Website
+                    website = ""
+                    web_el = await card.query_selector("a.website-link") or await card.query_selector("a[rel='noopener']")
+                    if web_el:
+                        website = await web_el.get_attribute("href") or ""
+                    
+                    # Only keep if it looks like a real trade listing
+                    if name and (phone or addr):
+                        results.append({
+                            "business_name": name,
+                            "phone": phone,
+                            "address": addr,
+                            "website": website,
+                            "category": category,
+                            "city": city,
+                            "state": state,
+                            "source": "yellowpages.com.au"
+                        })
+                except Exception:
+                    continue
+                    
+        except Exception as e:
+            print(f"  ERROR during scrape: {e}")
+        finally:
+            await browser.close()
+    
+    return results
+
+async def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--city", default="Sydney")
+    parser.add_argument("--state", default="NSW")
+    parser.add_argument("--category", default="plumber")
+    parser.add_argument("--pages", type=int, default=3)
+    parser.add_argument("--out", default=None)
+    args = parser.parse_args()
+    
+    print(f"Scraping '{args.category}' in {args.city}, {args.state} …")
+    leads = await scrape(args.city, args.state, args.category, args.pages)
+    print(f"Collected {len(leads)} valid leads")
+    
+    out = Path(args.out) if args.out else Path(f"yp_{args.city.lower()}_{args.state.lower()}_{args.category}.json")
+    out.write_text(json.dumps(leads, indent=2, ensure_ascii=False))
+    print(f"Saved to {out}")
+
+if __name__ == "__main__":
+    asyncio.run(main())

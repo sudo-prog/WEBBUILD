@@ -61,7 +61,7 @@ mkdir -p ~/data/abn/dumps ~/data/abn/processed
 The weekly dump (~75 MB zipped) is published every Sunday/Monday UTC.
 
 ```bash
-cd /home/thinkpad/Projects/supabase_australia
+cd /home/thinkpad/Projects/active/WEBBUILD/supabase_australia
 python3 scripts/abn_bulk_download.py          # downloads latest
 python3 scripts/abn_bulk_download.py --dry-run  # shows URL only
 ```
@@ -143,7 +143,7 @@ Creates `ingestion_log` row with `source='abn_weekly_bulk'`.
 crontab -e
 
 # Add — every Monday 02:00 UTC
-0 2 * * 1 cd /home/thinkpad/Projects/supabase_australia && \
+0 2 * * 1 cd /home/thinkpad/Projects/active/WEBBUILD/supabase_australia && \
   /home/thinkpad/.hermes/hermes-agent/venv/bin/python scripts/weekly_abn_pipeline.py \
   >> /home/thinkpad/.hermes/logs/weekly_abn.log 2>&1
 ```

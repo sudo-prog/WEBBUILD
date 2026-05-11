@@ -1,0 +1,57 @@
+[
+  {
+    "business_name": "Test Plumbing",
+    "phone": "0298765432",
+    "email": "contact@testplumbing.com.au",
+    "category": "plumber",
+    "state": "NSW",
+    "city": "Sydney",
+    "suburb": "Sydney",
+    "address": "123 Test St",
+    "website": null
+  },
+  {
+    "business_name": "Sydney Electricians",
+    "phone": "0212345678",
+    "email": "admin@sydneyelectricians.com.au",
+    "category": "electrician",
+    "state": "NSW",
+    "city": "Sydney",
+    "suburb": "Sydney",
+    "address": "456 Test Ave",
+    "website": null
+  },
+  {
+    "business_name": "Best Builders",
+    "phone": "0287654321",
+    "email": "info@bestbuilders.com.au",
+    "category": "builder",
+    "state": "NSW",
+    "city": "Sydney",
+    "suburb": "Sydney",
+    "address": "789 Test Rd",
+    "website": null
+  },
+  {
+    "business_name": "Perfect Painters",
+    "phone": "0298765431",
+    "email": "hello@perfectpainters.com.au",
+    "category": "painter",
+    "state": "NSW",
+    "city": "Sydney",
+    "suburb": "Sydney",
+    "address": "321 Test Dr",
+    "website": null
+  },
+  {
+    "business_name": "Roofing Masters",
+    "phone": "0212345679",
+    "email": "admin@roofingmasters.com.au",
+    "category": "roofer",
+    "state": "NSW",
+    "city": "Sydney",
+    "suburb": "Sydney",
+    "address": "654 Test Blvd",
+    "website": null
+  }
+]

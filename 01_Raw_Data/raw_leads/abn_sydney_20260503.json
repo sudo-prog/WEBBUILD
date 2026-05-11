@@ -1,0 +1,38 @@
+[
+  {
+    "business_name": "Sydney Plumbing Services Pty Ltd",
+    "category": "plumber",
+    "phone": null,
+    "email": null,
+    "website": null,
+    "city": "Sydney",
+    "state": "NSW",
+    "suburb": null,
+    "postcode": "2127",
+    "address_full": null,
+    "source": "abn_bulk_2026-05-03",
+    "abn": "6313566284",
+    "abn_status": "active",
+    "lead_score": null,
+    "needs_review": false,
+    "enriched_at": "2026-05-03T10:17:43.558765+00:00"
+  },
+  {
+    "business_name": "Elite Airconditioning Services",
+    "category": "air conditioning",
+    "phone": null,
+    "email": null,
+    "website": null,
+    "city": "Sydney",
+    "state": "NSW",
+    "suburb": null,
+    "postcode": "2029",
+    "address_full": null,
+    "source": "abn_bulk_2026-05-03",
+    "abn": "1056789012",
+    "abn_status": "active",
+    "lead_score": null,
+    "needs_review": false,
+    "enriched_at": "2026-05-03T10:17:43.558829+00:00"
+  }
+]
