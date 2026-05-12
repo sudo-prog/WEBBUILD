@@ -1,0 +1,24 @@
+
+# Dependencies
+node_modules/
+bower_components/
+
+# Logs and databases
+*.log
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment variables
+.env
+
+# OS X
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+
+# Data directories (if not tracking data files)
+data/
+    

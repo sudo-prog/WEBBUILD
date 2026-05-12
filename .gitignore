@@ -2,6 +2,7 @@
 
 # Secrets - never commit
 .env
+.env.supabase
 
 # Python
 __pycache__/

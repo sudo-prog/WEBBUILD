@@ -14,7 +14,7 @@ DB_HOST = "localhost"
 DB_PORT = 6543
 DB_NAME = "postgres"
 DB_USER = "postgres"
-DB_PASS = "supabase_service_1777905407"
+DB_PASS = os.getenv("PGPASSWORD", "")
 
 # Target cities (same as in abn_enrichment.py)
 CITIES = ["sydney", "melbourne", "brisbane", "perth", "adelaide", "hobart", "darwin", "canberra"]

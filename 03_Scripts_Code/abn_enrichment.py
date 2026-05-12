@@ -42,7 +42,7 @@ SUPABASE_URL  = "localhost"
 SUPABASE_PORT = 6543
 SUPABASE_DB   = "postgres"
 SUPABASE_USER = "postgres"
-SUPABASE_PASS = "supabase_service_1777905407"  # Hardcoded for local Docker
+SUPABASE_PASS = os.getenv("PGPASSWORD", "")
 
 # Only attempt to load from env/config if we don't already have a password
 def _load_password() -> Optional[str]:
